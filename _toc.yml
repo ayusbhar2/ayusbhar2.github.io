@@ -1,0 +1,7 @@
+# In _toc.yml
+format: jb-article
+# root: main
+# chapters:
+# - file: mardown
+# - file: notebooks
+# - file: markdown-notebooks

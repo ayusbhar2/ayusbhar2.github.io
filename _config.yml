@@ -1,0 +1,24 @@
+# In _config.yml
+title: Ayush Bharadwaj
+author: Ayush Bharadwaj
+# logo: logo.png
+execute:
+  execute_notebooks: force
+
+# Add a bibtex file so that we can create citations
+# bibtex_bibfiles:
+  # - references.bib
+
+parse:
+  myst_enable_extensions:
+    # don't forget to list any other extensions you want enabled,
+    # including those that are enabled by default!
+    - amsmath
+    - dollarmath
+    - linkify
+    - colon_fence
+    - html_image
+
+sphinx:
+  extra_extensions:
+    - sphinx_proof
