@@ -9,8 +9,11 @@ kernelspec:
   name: python3
 ---
 
+(Personal landing page coming soon...)
+
 # About
 
 # Blog
+- [Math Blogging With Jupyter Book](https://ayusbhar2.github.io/math-bloging-with-jupyter-book/main.html)
 
 # Resume
