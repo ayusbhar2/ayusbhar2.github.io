@@ -1,6 +1,6 @@
-title: ""
+title: "Mathematics of Optimization"
 author: "Ayush Bharadwaj"
-description: "Made with <b style=\"color: #f45;\">&lt;3</b>"
+description: "My musings on the theory as well as applications of convex and non-convex optimizatino to interesting problems."
 permalink: /:title/
 lang: "en"
 excerpt_separator: "\n\n\n"
