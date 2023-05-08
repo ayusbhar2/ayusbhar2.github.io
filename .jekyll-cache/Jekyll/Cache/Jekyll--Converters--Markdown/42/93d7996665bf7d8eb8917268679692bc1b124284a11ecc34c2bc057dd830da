@@ -1,0 +1,10 @@
+I"<p>This is using the <code class="language-plaintext highlighter-rouge">$$ $$</code> environment: \(\mathbb{R}^n\)</p>
+
+<p>This is using equation environment</p>
+
+<p>\begin{equation}
+	\mathbb{R}^n \tag{boop}
+\end{equation}</p>
+
+<p>Manually referenced (boop)</p>
+:ET
