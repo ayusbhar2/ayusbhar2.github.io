@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2023-05-08T14:59:28-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Mathematics of Optimization</title><subtitle>My musings on the theory as well as applications of convex and non-convex optimizatino to interesting problems.</subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Test Post</title><link href="http://localhost:4000/test/" rel="alternate" type="text/html" title="Test Post" /><published>2023-05-08T00:00:00-07:00</published><updated>2023-05-08T00:00:00-07:00</updated><id>http://localhost:4000/test</id><content type="html" xml:base="http://localhost:4000/test/"><![CDATA[<p>This is using the <code class="language-plaintext highlighter-rouge">$$ $$</code> environment: \(\mathbb{R}^n\)</p>
+
+<p>This is using equation environment</p>
+
+<p>\begin{equation}
+	\mathbb{R}^n \tag{boop}
+\end{equation}</p>
+
+<p>Manually referenced (boop)</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[This is using the $$ $$ environment: \(\mathbb{R}^n\) This is using equation environment \begin{equation} \mathbb{R}^n \tag{boop} \end{equation} Manually referenced (boop)]]></summary></entry></feed>
