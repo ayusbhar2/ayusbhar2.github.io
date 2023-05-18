@@ -1,11 +1,11 @@
 ---
-title: "Solving the UCP with Mixed Integer Programming"
+title: "Solving the Unit Commitment Problem with Mixed Integer Programming"
 layout: post
 mathjax: true
 ---
 
-# Introduction
 The Unit Commitment Problem (UCP) [1] in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minmize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.
+
 
 The UCP can be formulated in a number of ways:
 - combinatorial approach
