@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2023-05-18T16:21:23-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Algebra and Geometry of Optimization</title><subtitle>My musings on the theory as well as applications of convex and non-convex optimizatino to interesting problems.</subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Solving the Unit Commitment Problem with Mixed Integer Programming</title><link href="http://localhost:4000/unit-commitment-problem/" rel="alternate" type="text/html" title="Solving the Unit Commitment Problem with Mixed Integer Programming" /><published>2023-05-18T00:00:00-07:00</published><updated>2023-05-18T00:00:00-07:00</updated><id>http://localhost:4000/unit-commitment-problem</id><content type="html" xml:base="http://localhost:4000/unit-commitment-problem/"><![CDATA[<p>The Unit Commitment Problem (UCP) [1] in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minmize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.</p>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2023-05-19T15:38:15-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Algebra and Geometry of Optimization</title><subtitle>My musings on the theory as well as applications of convex and non-convex optimizatino to interesting problems.</subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Solving the Unit Commitment Problem with Mixed Integer Programming</title><link href="http://localhost:4000/unit-commitment-problem/" rel="alternate" type="text/html" title="Solving the Unit Commitment Problem with Mixed Integer Programming" /><published>2023-05-18T00:00:00-07:00</published><updated>2023-05-18T00:00:00-07:00</updated><id>http://localhost:4000/unit-commitment-problem</id><content type="html" xml:base="http://localhost:4000/unit-commitment-problem/"><![CDATA[<p>The Unit Commitment Problem (UCP) [1] in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minmize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.</p>
 
 <p>The UCP can be formulated in a number of ways:</p>
 <ul>
@@ -838,6 +838,444 @@ u_{j, t} \in \{0, 1\} \ \forall\ j, t\]
 <p>Also note that, once again, the model chose to meet all of the demand in period 1 with unit A. The reason for this is two-fold. First, unit A is the cheapest to run and incurrs the smallest marginal cost. So, it makes sense to preferentially run unit A whenever possible. Second, unit A was already in ON state at the beginning of the planning horizon and did not need to be turned ON. As a result, by keeping unit A running, we avoided the setup cost for unit A.</p>
 
 <p>We should also note that during the peak demand period, the model chose to turn on unit C instead of unit B as it had done in MIP1. This is because while unit B is cheaper to run than unit C, it is more expensive to start up than unit C. Since the setup cost dominates the marginal cost, the model preferred to start up unit C.</p>
+
+<h2 id="an-mip-model-with-minimum-up--and-down-time-constraints">An MIP model with minimum up- and down-time constraints</h2>
+
+<p>Here, we get rid of the third and final relaxation:</p>
+<ol>
+  <li><del>All units are running and available at all times. I.e. we don’t have the choice to turn a unit ON/OFF.</del></li>
+  <li><del>Startup costs are ignored.</del></li>
+  <li><del>Minimum up- and down-time constraints do not apply.</del></li>
+</ol>
+
+<p>We now consider the up- and down-time constraints that apply to each unit. In order to model these constraints we need need to define two new parameters:</p>
+
+\[UT_j := \text{Minimum length of time (in periods/slots) that unit j must remain ON before it can be turned OFF.}\\
+DT_j := \text{Minimum length of time (in periods/slots) that unit j must remain OFF before it can be turned ON.}\]
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># parameters
+</span><span class="n">UT_A</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">UT_B</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span> <span class="n">UT_C</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+<span class="n">DT_A</span> <span class="o">=</span> <span class="mi">3</span><span class="p">;</span> <span class="n">DT_B</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">DT_C</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>We also need a new variable to indicate if a given unit was stopped in a given period.</p>
+
+\[\beta_{j, t} :=
+\begin{cases}
+   1 &amp;\text{   if unit j was stopped in period t}\\
+   0 &amp;\text{   otherwise }
+\end{cases}\]
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># variables
+</span><span class="n">beta_A1</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_A1"</span><span class="p">)</span>
+<span class="n">beta_A2</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_A2"</span><span class="p">)</span>
+<span class="n">beta_A3</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_A3"</span><span class="p">)</span>
+
+<span class="n">beta_B1</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_B1"</span><span class="p">)</span>
+<span class="n">beta_B2</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_B2"</span><span class="p">)</span>
+<span class="n">beta_B3</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_B3"</span><span class="p">)</span>
+
+<span class="n">beta_C1</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_C1"</span><span class="p">)</span>
+<span class="n">beta_C2</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_C2"</span><span class="p">)</span>
+<span class="n">beta_C3</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Variable</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">boolean</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">"beta_C3"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>We need to specify the shutdown constraint</p>
+
+\[\beta_{j, t} = \lfloor \frac{(-u_{j, t} + u_{j, t-1} + 1)}{2} \rfloor\]
+
+<p>which can be expressed in the form of linear inequalities as follows:</p>
+
+\[\beta_{j, t} \le \frac{-u_{j, t} + u_{j, t-1} + 1}{2},\ \ \ \  \beta_{j, t} + 1 \ge \frac{-u_{j, t} + u_{j, t-1} + 1}{2} + .25\qquad \text{(Shut-down)}\]
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">MIP3_shutdown_cons</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">beta_A1</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uA1</span> <span class="o">+</span> <span class="n">uA0</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_A1</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uA1</span> <span class="o">+</span> <span class="n">uA0</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+    <span class="n">beta_A2</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uA2</span> <span class="o">+</span> <span class="n">uA1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_A2</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uA2</span> <span class="o">+</span> <span class="n">uA1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+    <span class="n">beta_A3</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uA3</span> <span class="o">+</span> <span class="n">uA2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_A3</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uA3</span> <span class="o">+</span> <span class="n">uA2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+
+    <span class="n">beta_B1</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uB1</span> <span class="o">+</span> <span class="n">uB0</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_B1</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uB1</span> <span class="o">+</span> <span class="n">uB0</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+    <span class="n">beta_B2</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uB2</span> <span class="o">+</span> <span class="n">uB1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_B2</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uB2</span> <span class="o">+</span> <span class="n">uB1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+    <span class="n">beta_B3</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uB3</span> <span class="o">+</span> <span class="n">uB2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_B3</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uB3</span> <span class="o">+</span> <span class="n">uB2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+    
+    <span class="n">beta_C1</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uC1</span> <span class="o">+</span> <span class="n">uC0</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_C1</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uC1</span> <span class="o">+</span> <span class="n">uC0</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+    <span class="n">beta_C2</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uC2</span> <span class="o">+</span> <span class="n">uC1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_C2</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uC2</span> <span class="o">+</span> <span class="n">uC1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+    <span class="n">beta_C3</span> <span class="o">&lt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uC3</span> <span class="o">+</span> <span class="n">uC2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span><span class="p">,</span>
+    <span class="n">beta_C3</span> <span class="o">&gt;=</span> <span class="p">(</span><span class="o">-</span><span class="n">uC3</span> <span class="o">+</span> <span class="n">uC2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span><span class="o">/</span><span class="mi">2</span> <span class="o">+</span> <span class="p">.</span><span class="mi">25</span><span class="p">,</span>
+<span class="p">]</span>
+</code></pre></div></div>
+
+<p>We also need the minimum uptime constraints:</p>
+
+\[\tag{Up-time}
+\sum_{i=t}^{t + UT_j - 1} u_{j, i} \ge \alpha_{j,t} UT_j \ ,\qquad \forall\ t \in \{1,\ T - UT_j + 1\}\\
+\sum_{i=t}^T u_{j, i} \ge \alpha_{j, t} (T - t + 1) \ ,\qquad \forall\ t \in \{T - UT_j + 2,\ T\}\]
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">generate_uptime_cons</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+    <span class="nb">sum</span> <span class="o">=</span> <span class="s">''</span>
+    <span class="n">UT_j</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">'UT_{j}'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span> <span class="o">-</span> <span class="n">UT_j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">t</span> <span class="o">+</span> <span class="n">UT_j</span><span class="p">):</span>
+            <span class="nb">sum</span> <span class="o">+=</span> <span class="s">'u{j}{i} +'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">i</span><span class="o">=</span><span class="n">i</span><span class="p">)</span>
+        <span class="nb">sum</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="nb">sum</span> <span class="o">+=</span> <span class="s">' &gt;= alpha_{j}{t} * UT_{j}'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">T</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="nb">sum</span> <span class="o">+=</span> <span class="s">'u{j}{k} +'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">)</span>
+        <span class="nb">sum</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="nb">sum</span> <span class="o">+=</span> <span class="s">' &gt;= alpha_{j}{t} * (T - {t} + 1)'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">eval</span><span class="p">(</span><span class="nb">sum</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">MIP3_uptime_cons</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="p">[</span><span class="s">'A'</span><span class="p">,</span> <span class="s">'B'</span><span class="p">,</span> <span class="s">'C'</span><span class="p">]:</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">T</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">cons</span> <span class="o">=</span> <span class="n">generate_uptime_cons</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="n">cons</span><span class="p">)</span>
+        <span class="n">MIP3_uptime_cons</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">cons</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>alpha_A1 @ 3.0 &lt;= uA1 + uA2 + uA3
+alpha_A2 @ 2.0 &lt;= uA2 + uA3
+alpha_A3 @ 1.0 &lt;= uA3
+alpha_B1 @ 2.0 &lt;= uB1 + uB2
+alpha_B2 @ 2.0 &lt;= uB2 + uB3
+alpha_B3 @ 1.0 &lt;= uB3
+alpha_C1 @ 1.0 &lt;= uC1
+alpha_C2 @ 1.0 &lt;= uC2
+alpha_C3 @ 1.0 &lt;= uC3
+</code></pre></div></div>
+
+<p>And the minimum downtime constraints:</p>
+
+\[\tag{Down-time}
+\sum_{i=t}^{t + DT_j - 1} (1 - u_{j, i}) \ge \beta_{j,t} DT_j \ ,\qquad \forall\ t \in \{1,\ T - DT_j + 1\}\\
+\sum_{i=t}^T (1 - u_{j, i}) \ge \beta_{j, t} (T - t + 1) \ ,\qquad \forall\ t \in \{T - DT_j + 2,\ T\}\]
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">generate_downtime_cons</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="p">):</span>
+    <span class="nb">sum</span> <span class="o">=</span> <span class="s">''</span>
+    <span class="n">DT_j</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">'DT_{j}'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">t</span> <span class="o">&lt;=</span> <span class="n">T</span> <span class="o">-</span> <span class="n">DT_j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">t</span> <span class="o">+</span> <span class="n">DT_j</span><span class="p">):</span>
+            <span class="nb">sum</span> <span class="o">+=</span> <span class="s">'(1 - u{j}{i}) +'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">i</span><span class="o">=</span><span class="n">i</span><span class="p">)</span>
+        <span class="nb">sum</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="nb">sum</span> <span class="o">+=</span> <span class="s">' &gt;= beta_{j}{t} * DT_{j}'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">t</span><span class="p">,</span> <span class="n">T</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="nb">sum</span> <span class="o">+=</span> <span class="s">'(1 - u{j}{k}) +'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">k</span><span class="p">)</span>
+        <span class="nb">sum</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="nb">sum</span> <span class="o">+=</span> <span class="s">' &gt;= beta_{j}{t} * (T - {t} + 1)'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">t</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">eval</span><span class="p">(</span><span class="nb">sum</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">MIP3_downtime_cons</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="p">[</span><span class="s">'A'</span><span class="p">,</span> <span class="s">'B'</span><span class="p">,</span> <span class="s">'C'</span><span class="p">]:</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">T</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">cons</span> <span class="o">=</span> <span class="n">generate_downtime_cons</span><span class="p">(</span><span class="n">j</span><span class="p">,</span> <span class="n">t</span><span class="p">)</span>
+        <span class="k">print</span><span class="p">(</span><span class="n">cons</span><span class="p">)</span>
+        <span class="n">MIP3_downtime_cons</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">cons</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>beta_A1 @ 3.0 &lt;= 1.0 + -uA1 + 1.0 + -uA2 + 1.0 + -uA3
+beta_A2 @ 2.0 &lt;= 1.0 + -uA2 + 1.0 + -uA3
+beta_A3 @ 1.0 &lt;= 1.0 + -uA3
+beta_B1 @ 1.0 &lt;= 1.0 + -uB1
+beta_B2 @ 1.0 &lt;= 1.0 + -uB2
+beta_B3 @ 1.0 &lt;= 1.0 + -uB3
+beta_C1 @ 1.0 &lt;= 1.0 + -uC1
+beta_C2 @ 1.0 &lt;= 1.0 + -uC2
+beta_C3 @ 1.0 &lt;= 1.0 + -uC3
+</code></pre></div></div>
+
+<p>Finally, we need the logical constraints [1] to ensure that \(\alpha_{j,t} = 1\) only when the unit is scheduled to be switched on in slot \(t\) (i.e., \(u_{j, t-1} = 0\) and \(u_{j, t} = 1\)), and \(\beta_{j, t} = 1\) only when the unit is scheduled to be switched off in slot \(t\) (i.e., \(u_{j, t-1} = 1\) and \(u_{j, t} = 0\)).</p>
+
+\[u_{j, t-1} - u_{j, t} + \alpha_{j, t} - \beta_{j, t} = 0\ ,\qquad \forall\ t\in T,\ j\in J \tag{Logical}\]
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">MIP3_logical_cons</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="p">[</span><span class="s">'A'</span><span class="p">,</span> <span class="s">'B'</span><span class="p">,</span> <span class="s">'C'</span><span class="p">]:</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">T</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">cons</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">'u{j}{t_1} - u{j}{t} + alpha_{j}{t} - beta_{j}{t} == 0'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j</span><span class="p">,</span> <span class="n">t_1</span><span class="o">=</span><span class="n">t</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">t</span><span class="p">))</span>
+        <span class="k">print</span><span class="p">(</span><span class="n">cons</span><span class="p">)</span>
+        <span class="n">MIP3_logical_cons</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">cons</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>1.0 + -uA1 + alpha_A1 + -beta_A1 == 0.0
+uA1 + -uA2 + alpha_A2 + -beta_A2 == 0.0
+uA2 + -uA3 + alpha_A3 + -beta_A3 == 0.0
+0.0 + -uB1 + alpha_B1 + -beta_B1 == 0.0
+uB1 + -uB2 + alpha_B2 + -beta_B2 == 0.0
+uB2 + -uB3 + alpha_B3 + -beta_B3 == 0.0
+0.0 + -uC1 + alpha_C1 + -beta_C1 == 0.0
+uC1 + -uC2 + alpha_C2 + -beta_C2 == 0.0
+uC2 + -uC3 + alpha_C3 + -beta_C3 == 0.0
+</code></pre></div></div>
+
+<p>Since we are ignoring the shutdown costs of the units, our objective remains the same as that in (MIP-2). Below is our final model:</p>
+
+\[\text{minimize} \sum_{t\in T} \sum_{j \in J} c_j p_{j, t} + \alpha_{j, t} c_j^u\]
+
+\[\text{s.t.}\quad P_{j, min} u_{j, t} \le p_{j, t} \le P_{j, max} u_{j, t}\quad \text{(Output Range)}\]
+
+\[\sum_{j \in J} p_{j, t} \ge D_t\quad \text{(Demand)}\]
+
+\[\alpha_{j, t} \le \frac{u_{j, t} - u_{j, t-1} + 1}{2},\ \alpha_{j, t} + 1 \ge \frac{u_{j, t} - u_{j, t-1} + 1}{2} + .25 \quad \text{(Startup)}\]
+
+\[\sum_{i=t}^{t + UT_j - 1} u_{j, i} \ge \alpha_{j,t} UT_j \ ,\ \forall\ t \in \{1,\ T - UT_j + 1\} \quad \text{(Uptime)}\]
+
+\[\sum_{i=t}^T u_{j, i} \ge \alpha_{j, t} (T - t + 1) \ ,\ \ \forall\ t \in \{T - UT_j + 2,\ T\} \quad \text{(Uptime)}\]
+
+\[\sum_{i=t}^{t + DT_j - 1} (1 - u_{j, i}) \ge \beta_{j,t} DT_j \ ,\ \forall\ t \in \{1,\ T - DT_j + 1\} \quad \text{(Downtime)}\]
+
+\[\sum_{i=t}^T (1 - u_{j, i}) \ge \beta_{j, t} (T - t + 1) \ ,\ \forall\ t \in \{T - DT_j + 2,\ T\}\quad \text{(Downtime)}\]
+
+\[u_{j, t-1} - u_{j, t} + \alpha_{j, t} - \beta_{j, t} = 0\ ,\qquad \forall\ t\in T,\ j\in J \quad \text{(Logical)}\]
+
+\[u_{j, t} \in \{0, 1\} \ \forall\ j, t\\
+     \alpha_{j, t} \in \{0, 1\} \ \forall\ j, t\\
+     \beta_{j, t} \in \{0, 1\} \ \forall\ j, t \tag{MIP-3}\]
+
+<p>We now solve (MIP-3) with <code class="language-plaintext highlighter-rouge">cvxpy</code></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">MIP3_obj</span> <span class="o">=</span> <span class="n">MIP2</span><span class="p">.</span><span class="n">objective</span>
+<span class="n">MIP3_cons</span> <span class="o">=</span> <span class="n">MIP2</span><span class="p">.</span><span class="n">constraints</span> <span class="o">+</span> <span class="n">MIP3_uptime_cons</span> <span class="o">+</span> <span class="n">MIP3_downtime_cons</span> <span class="o">+</span> <span class="n">MIP3_logical_cons</span>
+<span class="c1"># + MIP3_shutdown_cons
+</span></code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">MIP3</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Problem</span><span class="p">(</span><span class="n">MIP3_obj</span><span class="p">,</span> <span class="n">MIP3_cons</span><span class="p">)</span>
+<span class="n">MIP3</span><span class="p">.</span><span class="n">solve</span><span class="p">();</span>
+<span class="n">summary_MIP3</span> <span class="o">=</span> <span class="n">get_result_summary</span><span class="p">(</span><span class="n">MIP3</span><span class="p">);</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">summary_MIP3</span><span class="p">[</span><span class="s">'status'</span><span class="p">]</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>'optimal'
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">summary_MIP3</span><span class="p">[</span><span class="s">'optimal_value'</span><span class="p">]</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>7100.0
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">prettify</span><span class="p">(</span><span class="n">summary_MIP3</span><span class="p">[</span><span class="s">'optimal_solution'</span><span class="p">])</span>
+</code></pre></div></div>
+
+<div>
+<style scoped="">
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>variable</th>
+      <th>value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>alpha_A1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>alpha_A2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>alpha_A3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>alpha_B1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>alpha_B2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>alpha_B3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>alpha_C1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>alpha_C2</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>alpha_C3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>beta_A1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>beta_A2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>beta_A3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>12</th>
+      <td>beta_B1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>beta_B2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>14</th>
+      <td>beta_B3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>15</th>
+      <td>beta_C1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>16</th>
+      <td>beta_C2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>17</th>
+      <td>beta_C3</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>18</th>
+      <td>pA1</td>
+      <td>150.0</td>
+    </tr>
+    <tr>
+      <th>19</th>
+      <td>pA2</td>
+      <td>250.0</td>
+    </tr>
+    <tr>
+      <th>20</th>
+      <td>pA3</td>
+      <td>200.0</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td>pB1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td>pB2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>23</th>
+      <td>pB3</td>
+      <td>-0.0</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td>pC1</td>
+      <td>-0.0</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td>pC2</td>
+      <td>50.0</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td>pC3</td>
+      <td>-0.0</td>
+    </tr>
+    <tr>
+      <th>27</th>
+      <td>uA1</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>28</th>
+      <td>uA2</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>29</th>
+      <td>uA3</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>30</th>
+      <td>uB1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>31</th>
+      <td>uB2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>32</th>
+      <td>uB3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>33</th>
+      <td>uC1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>34</th>
+      <td>uC2</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>35</th>
+      <td>uC3</td>
+      <td>0.0</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<p>As it turns out, the optimal cost of scheduling the three units over the given planning horizon remains unchanged at <mark>$7100</mark>. What is interesting is that we are able to satisfy multiple additional constraints at the same total cost as MIP2! This fact is due to the (simplified) structure of our specific problem. In a real-life scenario, adding constraints can lead to increased total cost. Nevertheless, discussing the above porblem gives us insight into how MIP can be used to model and solve similar, larger problems at scale.</p>
 
 <h1 id="references">References</h1>
 

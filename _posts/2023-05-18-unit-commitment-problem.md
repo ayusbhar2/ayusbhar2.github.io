@@ -891,6 +891,515 @@ Also note that, once again, the model chose to meet all of the demand in period 
 
 We should also note that during the peak demand period, the model chose to turn on unit C instead of unit B as it had done in MIP1. This is because while unit B is cheaper to run than unit C, it is more expensive to start up than unit C. Since the setup cost dominates the marginal cost, the model preferred to start up unit C.
 
+## An MIP model with minimum up- and down-time constraints
+
+Here, we get rid of the third and final relaxation:
+1. ~~All units are running and available at all times. I.e. we don't have the choice to turn a unit ON/OFF.~~
+2. ~~Startup costs are ignored.~~
+3. ~~Minimum up- and down-time constraints do not apply.~~
+
+We now consider the up- and down-time constraints that apply to each unit. In order to model these constraints we need need to define two new parameters:
+
+$$
+UT_j := \text{Minimum length of time (in periods/slots) that unit j must remain ON before it can be turned OFF.}\\
+DT_j := \text{Minimum length of time (in periods/slots) that unit j must remain OFF before it can be turned ON.}
+$$
+
+
+```python
+# parameters
+UT_A = 3; UT_B = 2; UT_C = 1;
+DT_A = 3; DT_B = 1; DT_C = 1;
+```
+
+We also need a new variable to indicate if a given unit was stopped in a given period.
+
+$$
+\beta_{j, t} :=
+\begin{cases}
+   1 &\text{   if unit j was stopped in period t}\\
+   0 &\text{   otherwise }
+\end{cases}
+$$
+
+
+```python
+# variables
+beta_A1 = cp.Variable(1, boolean=True, name="beta_A1")
+beta_A2 = cp.Variable(1, boolean=True, name="beta_A2")
+beta_A3 = cp.Variable(1, boolean=True, name="beta_A3")
+
+beta_B1 = cp.Variable(1, boolean=True, name="beta_B1")
+beta_B2 = cp.Variable(1, boolean=True, name="beta_B2")
+beta_B3 = cp.Variable(1, boolean=True, name="beta_B3")
+
+beta_C1 = cp.Variable(1, boolean=True, name="beta_C1")
+beta_C2 = cp.Variable(1, boolean=True, name="beta_C2")
+beta_C3 = cp.Variable(1, boolean=True, name="beta_C3")
+```
+
+We need to specify the shutdown constraint
+
+$$
+\beta_{j, t} = \lfloor \frac{(-u_{j, t} + u_{j, t-1} + 1)}{2} \rfloor
+$$
+
+which can be expressed in the form of linear inequalities as follows:
+
+$$
+\beta_{j, t} \le \frac{-u_{j, t} + u_{j, t-1} + 1}{2},\ \ \ \  \beta_{j, t} + 1 \ge \frac{-u_{j, t} + u_{j, t-1} + 1}{2} + .25\qquad \text{(Shut-down)}
+$$
+
+
+```python
+MIP3_shutdown_cons = [
+    beta_A1 <= (-uA1 + uA0 + 1)/2,
+    beta_A1 >= (-uA1 + uA0 + 1)/2 + .25,
+    beta_A2 <= (-uA2 + uA1 + 1)/2,
+    beta_A2 >= (-uA2 + uA1 + 1)/2 + .25,
+    beta_A3 <= (-uA3 + uA2 + 1)/2,
+    beta_A3 >= (-uA3 + uA2 + 1)/2 + .25,
+
+    beta_B1 <= (-uB1 + uB0 + 1)/2,
+    beta_B1 >= (-uB1 + uB0 + 1)/2 + .25,
+    beta_B2 <= (-uB2 + uB1 + 1)/2,
+    beta_B2 >= (-uB2 + uB1 + 1)/2 + .25,
+    beta_B3 <= (-uB3 + uB2 + 1)/2,
+    beta_B3 >= (-uB3 + uB2 + 1)/2 + .25,
+    
+    beta_C1 <= (-uC1 + uC0 + 1)/2,
+    beta_C1 >= (-uC1 + uC0 + 1)/2 + .25,
+    beta_C2 <= (-uC2 + uC1 + 1)/2,
+    beta_C2 >= (-uC2 + uC1 + 1)/2 + .25,
+    beta_C3 <= (-uC3 + uC2 + 1)/2,
+    beta_C3 >= (-uC3 + uC2 + 1)/2 + .25,
+]
+```
+
+We also need the minimum uptime constraints:
+
+$$
+\tag{Up-time}
+\sum_{i=t}^{t + UT_j - 1} u_{j, i} \ge \alpha_{j,t} UT_j \ ,\qquad \forall\ t \in \{1,\ T - UT_j + 1\}\\
+\sum_{i=t}^T u_{j, i} \ge \alpha_{j, t} (T - t + 1) \ ,\qquad \forall\ t \in \{T - UT_j + 2,\ T\}
+$$
+
+
+
+
+```python
+def generate_uptime_cons(j, t):
+    sum = ''
+    UT_j = eval('UT_{j}'.format(j=j))
+    if t <= T - UT_j + 1:
+        for i in range(t, t + UT_j):
+            sum += 'u{j}{i} +'.format(j=j, i=i)
+        sum = sum[:-1]
+        sum += ' >= alpha_{j}{t} * UT_{j}'.format(j=j, t=t)
+    else:
+        for k in range(t, T + 1):
+            sum += 'u{j}{k} +'.format(j=j, k=k)
+        sum = sum[:-1]
+        sum += ' >= alpha_{j}{t} * (T - {t} + 1)'.format(j=j, t=t)
+    return eval(sum)
+```
+
+
+```python
+MIP3_uptime_cons = []
+for j in ['A', 'B', 'C']:
+    for t in range(1, T + 1):
+        cons = generate_uptime_cons(j, t)
+        print(cons)
+        MIP3_uptime_cons.append(cons)
+```
+
+    alpha_A1 @ 3.0 <= uA1 + uA2 + uA3
+    alpha_A2 @ 2.0 <= uA2 + uA3
+    alpha_A3 @ 1.0 <= uA3
+    alpha_B1 @ 2.0 <= uB1 + uB2
+    alpha_B2 @ 2.0 <= uB2 + uB3
+    alpha_B3 @ 1.0 <= uB3
+    alpha_C1 @ 1.0 <= uC1
+    alpha_C2 @ 1.0 <= uC2
+    alpha_C3 @ 1.0 <= uC3
+
+
+And the minimum downtime constraints:
+
+$$
+\tag{Down-time}
+\sum_{i=t}^{t + DT_j - 1} (1 - u_{j, i}) \ge \beta_{j,t} DT_j \ ,\qquad \forall\ t \in \{1,\ T - DT_j + 1\}\\
+\sum_{i=t}^T (1 - u_{j, i}) \ge \beta_{j, t} (T - t + 1) \ ,\qquad \forall\ t \in \{T - DT_j + 2,\ T\}
+$$
+
+
+```python
+def generate_downtime_cons(j, t):
+    sum = ''
+    DT_j = eval('DT_{j}'.format(j=j))
+    if t <= T - DT_j + 1:
+        for i in range(t, t + DT_j):
+            sum += '(1 - u{j}{i}) +'.format(j=j, i=i)
+        sum = sum[:-1]
+        sum += ' >= beta_{j}{t} * DT_{j}'.format(j=j, t=t)
+    else:
+        for k in range(t, T + 1):
+            sum += '(1 - u{j}{k}) +'.format(j=j, k=k)
+        sum = sum[:-1]
+        sum += ' >= beta_{j}{t} * (T - {t} + 1)'.format(j=j, t=t)
+    return eval(sum)
+```
+
+
+```python
+MIP3_downtime_cons = []
+for j in ['A', 'B', 'C']:
+    for t in range(1, T + 1):
+        cons = generate_downtime_cons(j, t)
+        print(cons)
+        MIP3_downtime_cons.append(cons)
+```
+
+    beta_A1 @ 3.0 <= 1.0 + -uA1 + 1.0 + -uA2 + 1.0 + -uA3
+    beta_A2 @ 2.0 <= 1.0 + -uA2 + 1.0 + -uA3
+    beta_A3 @ 1.0 <= 1.0 + -uA3
+    beta_B1 @ 1.0 <= 1.0 + -uB1
+    beta_B2 @ 1.0 <= 1.0 + -uB2
+    beta_B3 @ 1.0 <= 1.0 + -uB3
+    beta_C1 @ 1.0 <= 1.0 + -uC1
+    beta_C2 @ 1.0 <= 1.0 + -uC2
+    beta_C3 @ 1.0 <= 1.0 + -uC3
+
+
+Finally, we need the logical constraints [1] to ensure that $$\alpha_{j,t} = 1$$ only when the unit is scheduled to be switched on in slot $$t$$ (i.e., $$u_{j, t-1} = 0$$ and $$u_{j, t} = 1$$), and $$\beta_{j, t} = 1$$ only when the unit is scheduled to be switched off in slot $$t$$ (i.e., $$u_{j, t-1} = 1$$ and $$u_{j, t} = 0$$).
+
+$$
+u_{j, t-1} - u_{j, t} + \alpha_{j, t} - \beta_{j, t} = 0\ ,\qquad \forall\ t\in T,\ j\in J \tag{Logical}
+$$
+
+
+```python
+MIP3_logical_cons = []
+for j in ['A', 'B', 'C']:
+    for t in range(1, T + 1):
+        cons = eval('u{j}{t_1} - u{j}{t} + alpha_{j}{t} - beta_{j}{t} == 0'.format(j=j, t_1=t-1, t=t))
+        print(cons)
+        MIP3_logical_cons.append(cons)
+```
+
+    1.0 + -uA1 + alpha_A1 + -beta_A1 == 0.0
+    uA1 + -uA2 + alpha_A2 + -beta_A2 == 0.0
+    uA2 + -uA3 + alpha_A3 + -beta_A3 == 0.0
+    0.0 + -uB1 + alpha_B1 + -beta_B1 == 0.0
+    uB1 + -uB2 + alpha_B2 + -beta_B2 == 0.0
+    uB2 + -uB3 + alpha_B3 + -beta_B3 == 0.0
+    0.0 + -uC1 + alpha_C1 + -beta_C1 == 0.0
+    uC1 + -uC2 + alpha_C2 + -beta_C2 == 0.0
+    uC2 + -uC3 + alpha_C3 + -beta_C3 == 0.0
+
+
+Since we are ignoring the shutdown costs of the units, our objective remains the same as that in (MIP-2). Below is our final model:
+
+$$
+    \text{minimize} \sum_{t\in T} \sum_{j \in J} c_j p_{j, t} + \alpha_{j, t} c_j^u
+$$
+
+$$
+     \text{s.t.}\quad P_{j, min} u_{j, t} \le p_{j, t} \le P_{j, max} u_{j, t}\quad \text{(Output Range)}
+$$
+
+$$
+     \sum_{j \in J} p_{j, t} \ge D_t\quad \text{(Demand)} 
+$$
+
+$$
+     \alpha_{j, t} \le \frac{u_{j, t} - u_{j, t-1} + 1}{2},\ \alpha_{j, t} + 1 \ge \frac{u_{j, t} - u_{j, t-1} + 1}{2} + .25 \quad \text{(Startup)}
+$$
+
+$$
+\sum_{i=t}^{t + UT_j - 1} u_{j, i} \ge \alpha_{j,t} UT_j \ ,\ \forall\ t \in \{1,\ T - UT_j + 1\} \quad \text{(Uptime)}
+$$
+
+$$
+\sum_{i=t}^T u_{j, i} \ge \alpha_{j, t} (T - t + 1) \ ,\ \ \forall\ t \in \{T - UT_j + 2,\ T\} \quad \text{(Uptime)}
+$$
+
+$$
+\sum_{i=t}^{t + DT_j - 1} (1 - u_{j, i}) \ge \beta_{j,t} DT_j \ ,\ \forall\ t \in \{1,\ T - DT_j + 1\} \quad \text{(Downtime)}
+$$
+
+$$
+\sum_{i=t}^T (1 - u_{j, i}) \ge \beta_{j, t} (T - t + 1) \ ,\ \forall\ t \in \{T - DT_j + 2,\ T\}\quad \text{(Downtime)}
+$$
+
+$$
+u_{j, t-1} - u_{j, t} + \alpha_{j, t} - \beta_{j, t} = 0\ ,\qquad \forall\ t\in T,\ j\in J \quad \text{(Logical)}
+$$
+
+$$
+     u_{j, t} \in \{0, 1\} \ \forall\ j, t\\
+     \alpha_{j, t} \in \{0, 1\} \ \forall\ j, t\\
+     \beta_{j, t} \in \{0, 1\} \ \forall\ j, t \tag{MIP-3}
+$$
+
+We now solve (MIP-3) with `cvxpy`
+
+
+```python
+MIP3_obj = MIP2.objective
+MIP3_cons = MIP2.constraints + MIP3_uptime_cons + MIP3_downtime_cons + MIP3_logical_cons
+# + MIP3_shutdown_cons
+```
+
+```python
+MIP3 = cp.Problem(MIP3_obj, MIP3_cons)
+MIP3.solve();
+summary_MIP3 = get_result_summary(MIP3);
+```
+
+
+```python
+summary_MIP3['status']
+```
+
+
+
+
+    'optimal'
+
+
+
+
+```python
+summary_MIP3['optimal_value']
+```
+
+
+
+
+    7100.0
+
+
+
+
+```python
+prettify(summary_MIP3['optimal_solution'])
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>variable</th>
+      <th>value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>alpha_A1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>alpha_A2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>alpha_A3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>alpha_B1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>alpha_B2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>alpha_B3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>alpha_C1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>alpha_C2</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>alpha_C3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>beta_A1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>beta_A2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>beta_A3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>12</th>
+      <td>beta_B1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>beta_B2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>14</th>
+      <td>beta_B3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>15</th>
+      <td>beta_C1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>16</th>
+      <td>beta_C2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>17</th>
+      <td>beta_C3</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>18</th>
+      <td>pA1</td>
+      <td>150.0</td>
+    </tr>
+    <tr>
+      <th>19</th>
+      <td>pA2</td>
+      <td>250.0</td>
+    </tr>
+    <tr>
+      <th>20</th>
+      <td>pA3</td>
+      <td>200.0</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td>pB1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td>pB2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>23</th>
+      <td>pB3</td>
+      <td>-0.0</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td>pC1</td>
+      <td>-0.0</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td>pC2</td>
+      <td>50.0</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td>pC3</td>
+      <td>-0.0</td>
+    </tr>
+    <tr>
+      <th>27</th>
+      <td>uA1</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>28</th>
+      <td>uA2</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>29</th>
+      <td>uA3</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>30</th>
+      <td>uB1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>31</th>
+      <td>uB2</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>32</th>
+      <td>uB3</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>33</th>
+      <td>uC1</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>34</th>
+      <td>uC2</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <th>35</th>
+      <td>uC3</td>
+      <td>0.0</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+As it turns out, the optimal cost of scheduling the three units over the given planning horizon remains unchanged at <mark>$7100</mark>. What is interesting is that we are able to satisfy multiple additional constraints at the same total cost as MIP2! This fact is due to the (simplified) structure of our specific problem. In a real-life scenario, adding constraints can lead to increased total cost. Nevertheless, discussing the above porblem gives us insight into how MIP can be used to model and solve similar, larger problems at scale.
+
+
 # References
 
 [1] https://ntnuopen.ntnu.no/ntnu-xmlui/bitstream/handle/11250/298917/UnitCommitment.pdf?sequence=3
