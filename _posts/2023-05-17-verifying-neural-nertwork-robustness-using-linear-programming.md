@@ -73,9 +73,11 @@ $$ S_{l} = \{y \in \mathbb{R}^K: y_{l} > y_i, i \ne l\} $$
 
 **Remark.** The output function maps an input to the corresponding induced polyhedron. Let $$x_0 \in \mathbb{R}^n$$ be an input to a classifier network with classification function $$F$$ and output function $$f_W$$. Then,
 
-$$ \begin{equation}
+$$
+\begin{equation*}
      F(x_0) = l_0 \iff f_W(x_0) \subset S_{l_0}
-\end{equation} $$
+\end{equation*}
+$$
 
 In other words, the network assigns the class label $$l_0$$ to the input $$x_0$$ if and only if $$f_W(x_0)$$ lies inside the polyhedron induced by $$l_0$$.
 
@@ -331,15 +333,5 @@ $$
 
 where (Conv) must be solved $$K -1$$ times with varying $$l'$$. Note that (Conv) is a convex (in fact affine) problem and can be easily solved with the help of any Linear Programming solver.
 
-# Final Note
-
-
-
-
-
-
-
-
-
-
-
+# Conclusion
+It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies *non-robustness*. However, infeasibility of (Conv) does *not* certify *robustness*. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example. (For an illustration of using the above approach to find adversarial examples check out this [post]().)
