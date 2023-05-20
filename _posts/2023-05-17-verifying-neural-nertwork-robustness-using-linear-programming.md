@@ -1,5 +1,5 @@
 ---
-title: "Verifying Neural Network Robustness using Linear Programming"
+title: "Verifying Neural Network Robustness with Linear Programming"
 layout: post
 mathjax: true
 ---
