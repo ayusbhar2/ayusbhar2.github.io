@@ -1,6 +1,6 @@
-title: "Algebra and Geometry of Optimization"
+title: "Algebra, Geometry and Applications of Optimization"
 author: "Ayush Bharadwaj"
-description: "My musings on the theory as well as applications of convex and non-convex optimizatino to interesting problems."
+description: ""
 permalink: /:title/
 lang: "en"
 excerpt_separator: "\n\n\n"
@@ -11,22 +11,24 @@ date_format: "%B %d, %Y"
 show_excerpts: true        # show article excerpts on the home page
 show_frame: true           # adds a gray frame to the site
 show_sidebar: true        # show a sidebar instead of the usual header
-minimal: false             # use a dark header
+minimal: true             # use a dark header
 
 # Menu
 
 navigation:                # accepts {file, title, url, icon, sidebaricon}
   - {file: "index.html"}
-  - {url: "/readme"}
+  # - {url: "/readme"}
   - title: About
     url: /about
   - title: Projects
     url: /projects
+  - title: Resume
+    url: /assets/files/ayush_resume_v10.pdf
 
 external:                  # shows a footer with social links - for available icons see fontawesome.com/icons
   - {title: Mail, icon: envelope, url: "mailto:ayush.bharadwaj@gmail.com"}
   - {title: Github, icon: github, url: "https://github.com/ayusbhar2"}
-  - {title: Subscribe, icon: rss, url: "/feed.xml"}
+  # - {title: Subscribe, icon: rss, url: "/feed.xml"}
 
 comments:
 #  disqus_shortname: ""    # see https://disqus.com/
