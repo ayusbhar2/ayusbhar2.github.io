@@ -41,7 +41,7 @@
       <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#github"></use></svg>
       <span aria-hidden="true">Github</span>
     </a></nav>
-  <div class="description"></div>
+  <div class="description">Algebra, Geometry and Applications of Optimization</div>
 </aside>
 
 
@@ -308,16 +308,31 @@
 
 <div>
 <style scoped="">
+/*    div {border: none}*/
+    .dataframe {
+      border-collapse: collapse;
+/*      width: 100%;*/
+      border: none;
+    }
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
     }
-
     .dataframe tbody tr th {
         vertical-align: top;
+/*        border: 1px solid #ddd;*/
+        padding: 8px;
     }
-
+    .dataframe tr:nth-child(even){background-color: #f2f2f2;}
+    .dataframe tr:hover {background-color: #ddd;}
     .dataframe thead th {
         text-align: right;
+    }
+    .dataframe th {
+      padding-top: 12px;
+      padding-bottom: 12px;
+      text-align: left;
+/*      background-color: #04AA6D;*/
+      color: black;
     }
 </style>
 <table border="1" class="dataframe">
@@ -1118,6 +1133,10 @@ uC2 + -uC3 + alpha_C3 + -beta_C3 == 0.0
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>'optimal'
 </code></pre></div></div>
+
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="k">def</span> <span class="nf">foo</span>
+  <span class="nb">puts</span> <span class="s1">'foo'</span>
+<span class="k">end</span></code></pre></figure>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">summary_MIP3</span><span class="p">[</span><span class="s">'optimal_value'</span><span class="p">]</span>
 </code></pre></div></div>

@@ -223,16 +223,31 @@ prettify(summary_LP['optimal_solution'])
 
 <div>
 <style scoped>
+/*    div {border: none}*/
+    .dataframe {
+      border-collapse: collapse;
+/*      width: 100%;*/
+      border: none;
+    }
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
     }
-
     .dataframe tbody tr th {
         vertical-align: top;
+/*        border: 1px solid #ddd;*/
+        padding: 8px;
     }
-
+    .dataframe tr:nth-child(even){background-color: #f2f2f2;}
+    .dataframe tr:hover {background-color: #ddd;}
     .dataframe thead th {
         text-align: right;
+    }
+    .dataframe th {
+      padding-top: 12px;
+      padding-bottom: 12px;
+      text-align: left;
+/*      background-color: #04AA6D;*/
+      color: black;
     }
 </style>
 <table border="1" class="dataframe">
@@ -1169,6 +1184,11 @@ summary_MIP3['status']
     'optimal'
 
 
+{% highlight ruby %}
+def foo
+  puts 'foo'
+end
+{% endhighlight %}
 
 
 ```python

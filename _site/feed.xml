@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2023-05-20T12:54:26-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Algebra, Geometry and Applications of Optimization</title><subtitle></subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Solving the Unit Commitment Problem with Mixed Integer Programming</title><link href="http://localhost:4000/unit-commitment-problem/" rel="alternate" type="text/html" title="Solving the Unit Commitment Problem with Mixed Integer Programming" /><published>2023-05-18T00:00:00-07:00</published><updated>2023-05-18T00:00:00-07:00</updated><id>http://localhost:4000/unit-commitment-problem</id><content type="html" xml:base="http://localhost:4000/unit-commitment-problem/"><![CDATA[<p>The Unit Commitment Problem (UCP) [1] in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minmize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.</p>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2023-05-22T15:07:05-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Algebra, Geometry and Applications of Optimization</title><subtitle>Algebra, Geometry and Applications of Optimization</subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Solving the Unit Commitment Problem with Mixed Integer Programming</title><link href="http://localhost:4000/unit-commitment-problem/" rel="alternate" type="text/html" title="Solving the Unit Commitment Problem with Mixed Integer Programming" /><published>2023-05-18T00:00:00-07:00</published><updated>2023-05-18T00:00:00-07:00</updated><id>http://localhost:4000/unit-commitment-problem</id><content type="html" xml:base="http://localhost:4000/unit-commitment-problem/"><![CDATA[<p>The Unit Commitment Problem (UCP) [1] in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minmize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.</p>
 
 <p>The UCP can be formulated in a number of ways:</p>
 <ul>
@@ -248,16 +248,31 @@
 
 <div>
 <style scoped="">
+/*    div {border: none}*/
+    .dataframe {
+      border-collapse: collapse;
+/*      width: 100%;*/
+      border: none;
+    }
     .dataframe tbody tr th:only-of-type {
         vertical-align: middle;
     }
-
     .dataframe tbody tr th {
         vertical-align: top;
+/*        border: 1px solid #ddd;*/
+        padding: 8px;
     }
-
+    .dataframe tr:nth-child(even){background-color: #f2f2f2;}
+    .dataframe tr:hover {background-color: #ddd;}
     .dataframe thead th {
         text-align: right;
+    }
+    .dataframe th {
+      padding-top: 12px;
+      padding-bottom: 12px;
+      text-align: left;
+/*      background-color: #04AA6D;*/
+      color: black;
     }
 </style>
 <table border="1" class="dataframe">
@@ -1059,6 +1074,10 @@ uC2 + -uC3 + alpha_C3 + -beta_C3 == 0.0
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>'optimal'
 </code></pre></div></div>
 
+<figure class="highlight"><pre><code class="language-ruby" data-lang="ruby"><span class="k">def</span> <span class="nf">foo</span>
+  <span class="nb">puts</span> <span class="s1">'foo'</span>
+<span class="k">end</span></code></pre></figure>
+
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">summary_MIP3</span><span class="p">[</span><span class="s">'optimal_value'</span><span class="p">]</span>
 </code></pre></div></div>
 
@@ -1281,7 +1300,7 @@ uC2 + -uC3 + alpha_C3 + -beta_C3 == 0.0
 
 <p>[1] https://ntnuopen.ntnu.no/ntnu-xmlui/bitstream/handle/11250/298917/UnitCommitment.pdf?sequence=3</p>
 
-<p>[2] https://www.youtube.com/watch?v=jS15dU_422Q</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[The Unit Commitment Problem (UCP) [1] in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minmize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.]]></summary></entry><entry><title type="html">Verifying Neural Network Robustness using Linear Programming</title><link href="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/" rel="alternate" type="text/html" title="Verifying Neural Network Robustness using Linear Programming" /><published>2023-05-17T00:00:00-07:00</published><updated>2023-05-17T00:00:00-07:00</updated><id>http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming</id><content type="html" xml:base="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/"><![CDATA[<p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
+<p>[2] https://www.youtube.com/watch?v=jS15dU_422Q</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[The Unit Commitment Problem (UCP) [1] in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minmize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.]]></summary></entry><entry><title type="html">Verifying Neural Network Robustness with Linear Programming</title><link href="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/" rel="alternate" type="text/html" title="Verifying Neural Network Robustness with Linear Programming" /><published>2023-05-17T00:00:00-07:00</published><updated>2023-05-17T00:00:00-07:00</updated><id>http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming</id><content type="html" xml:base="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/"><![CDATA[<p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
 
 <p>Ensuring robustness of networks is important because neural networks are vulnerable to adversarial examples produced by small perturbations in the input. E.g. small changes in the image of a chihuahua can lead a network to <a href="https://www.freecodecamp.org/news/chihuahua-or-muffin-my-search-for-the-best-computer-vision-api-cbda4d6b425d/">classify it as a chocolate chip muffin</a>.</p>
 
