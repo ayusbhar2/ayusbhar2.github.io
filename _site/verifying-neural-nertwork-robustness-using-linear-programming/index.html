@@ -350,7 +350,19 @@
 <p>where (Conv) must be solved \(K -1\) times with varying \(l'\). Note that (Conv) is a convex (in fact affine) problem and can be easily solved with the help of any Linear Programming solver.</p>
 
 <h1 id="conclusion">Conclusion</h1>
+<p>In this post we defined the notion of robustness of a neural network and formulated the verificaion of robustness as an optimization problem. We then proposed a convex, LP approximation of this problem which can be solved easily with any linear programming solver.</p>
+
 <p>It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies <em>non-robustness</em>. However, infeasibility of (Conv) does <em>not</em> certify <em>robustness</em>. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example. (For an illustration of using the above approach to find adversarial examples check out this <a href="">post</a>.)</p>
+
+<h1 id="references">References</h1>
+
+<p>[1] Michael Andrew Roark. <em>Formal Verification of Neural Networks via Optimization Methods.</em> Masters Thesis (2022). Department of Mathematics, San Francisco State University. URL: https://doi.org/10.46569/20.500.12680/4t64gv41s</p>
+
+<p>[2] Changliu Liu, et al. <em>Algorithms for Verifying Deep Neural Networks.</em> (2020) URL: https://arxiv.org/abs/1903.06758</p>
+
+<p>[3] Mahyar Fazlyab, et al. <em>Safety Verification and Robustness Analysis of Neural Networks via Quadratic Constraints and Semidefinite Programming.</em> (2021) URL: 
+https://doi.org/10.48550/arXiv.1903.01287</p>
+
 
   
 </article>

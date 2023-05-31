@@ -334,4 +334,16 @@ $$
 where (Conv) must be solved $$K -1$$ times with varying $$l'$$. Note that (Conv) is a convex (in fact affine) problem and can be easily solved with the help of any Linear Programming solver.
 
 # Conclusion
+In this post we defined the notion of robustness of a neural network and formulated the verificaion of robustness as an optimization problem. We then proposed a convex, LP approximation of this problem which can be solved easily with any linear programming solver. 
+
 It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies *non-robustness*. However, infeasibility of (Conv) does *not* certify *robustness*. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example. (For an illustration of using the above approach to find adversarial examples check out this [post]().)
+
+# References
+
+[1] Michael Andrew Roark. *Formal Verification of Neural Networks via Optimization Methods.* Masters Thesis (2022). Department of Mathematics, San Francisco State University. URL: https://doi.org/10.46569/20.500.12680/4t64gv41s
+
+[2] Changliu Liu, et al. *Algorithms for Verifying Deep Neural Networks.* (2020) URL: https://arxiv.org/abs/1903.06758
+
+[3] Mahyar Fazlyab, et al. *Safety Verification and Robustness Analysis of Neural Networks via Quadratic Constraints and Semidefinite Programming.* (2021) URL: 
+https://doi.org/10.48550/arXiv.1903.01287
+
