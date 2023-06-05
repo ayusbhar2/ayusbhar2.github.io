@@ -352,7 +352,7 @@
 <h1 id="conclusion">Conclusion</h1>
 <p>In this post we defined the notion of robustness of a neural network and formulated the verificaion of robustness as an optimization problem. We then proposed a convex, LP approximation of this problem which can be solved easily with any linear programming solver.</p>
 
-<p>It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies <em>non-robustness</em>. However, infeasibility of (Conv) does <em>not</em> certify <em>robustness</em>. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example. (For an illustration of using the above approach to find adversarial examples check out this <a href="">post</a>.)</p>
+<p>It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies <em>non-robustness</em>. However, infeasibility of (Conv) does <em>not</em> certify <em>robustness</em>. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example. (For an illustration of using the above approach to verify neural network robustness, check out the alpha version of my project <a href="https://pypi.org/project/verifiNN/">verifiNN</a>.)</p>
 
 <h1 id="references">References</h1>
 
