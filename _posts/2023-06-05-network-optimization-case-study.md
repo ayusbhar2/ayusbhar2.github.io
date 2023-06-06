@@ -3,7 +3,7 @@ title: "Network Optimization Case Study: Aiding Allies"
 layout: post
 mathjax: true
 ---
-[Source: Frederick S. Hillier and Gerald J. Lieberman.  *Introduction to Operations Research - 7th ed.*, McGraw-Hill, ISBN 0-07-232169-5]
+[Source: Frederick S. Hillier and Gerald J. Lieberman.  *Introduction to Operations Research - 7th ed.*, 2000, McGraw-Hill, ISBN 0-07-232169-5]
 
 A rebel army is attempting to overthrow the elected government of the Russian Federation. The United States government has decided to assist its ally by quickly sending troops and supplies to the Federation. A plan needs to be developed for shipping the troops and supplies most effectively. Depending on the overall measure of performance, the analysis requires formulating and solving a shortest-path problem, a minimum cost flow problem, or a maximum flow problem.
 
@@ -744,7 +744,7 @@ df.style.applymap(cond_formatting)
 
 The above result confirms what we already knew from the previous section - the fastest path from Boston to StPetersburg is `Boston --> London --> Saint Petersburg (12.70 hr)`. We can solve similar fomulations for each source-target pair to get the desired results.
 
-It should not come as a surprise that the above problem could be modeled both as a BIP and a Dijkstra's shortest path problem. In fact both these problems are solved using an algorithm paradigm called **Dynamic Programming**.
+It should not come as a surprise that the above problem could be modeled both as a BIP and a Dijkstra's shortest path problem. In fact both these problems are solved using the **Dynamic Programming** paradigm.
 
 It is worth noting that most BIP solvers use some variation of the Branch and Bound algorithm which recursively solves repeated LP relaxations of the original BIP with the simplex method. Since the simplex algorithm is a polynomial time algorithm, the average total running time for the original BIP is close to polynomial in the size of the problem (i.e. number of variables). Let $$N: = $$number of vertices and $$M:=$$ number of edges in the graph. Then, from the above formulation, we note that the total number of variables is $$M + N$$. The average running time of the Branch and Bound algorithm is given by $$O(M + N)^p$$, $$p > 1$$. On the other hand, Dijkstra's shortest path algorithm has a running time of $$O(MN)$$.
 
