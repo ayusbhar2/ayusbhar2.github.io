@@ -1820,4 +1820,4 @@ As seen above, the optimal solution for the maximum cost flow problem shown abov
 
 # References
 
-Code available at URL: https://github.com/ayusbhar2/operations_research/tree/main/solver
+Notebook available at: https://github.com/ayusbhar2/optimization/blob/main/applications/network_optimization/network_optimization.ipynb
