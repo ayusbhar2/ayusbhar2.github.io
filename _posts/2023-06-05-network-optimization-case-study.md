@@ -1,11 +1,15 @@
 ---
-title: "Network Optimization Case Study: Aiding Allies<sup>[1]</sup>"
+title: "Network Optimization Case Study: Aiding Allies"
 layout: post
 mathjax: true
 ---
+[Source: Frederick S. Hillier and Gerald J. Lieberman.  *Introduction to Operations Research - 7th ed.*, McGraw-Hill, ISBN 0-07-232169-5]
 
+A rebel army is attempting to overthrow the elected government of the Russian Federation. The United Sttates government has decided to assist its ally by quickly sending troops and supplies to the Federation. A plan needs to be developed for shipping the troops and supplies most effectively. Depending on the overall measure of performance, the analysis requires formulating and solving a shortest-path problem, a minimum cost flow problem, or a maximum flow problem.
+
+
+-------------------------------------------------------------------------------
 Commander Votachev steps into the cold October night and deeply inhales the smoke from his cigarette, savoring its warmth. He surveys the destruction surrounding him — shattered windows, burning buildings, torn roads — and smiles. His two years of work training revolutionaries east of the Ural Mountains has proved successful; his troops now occupy seven strategically important cities in the Russian Federation: Kazan, Perm,Yekaterinburg, Ufa, Samara, Saratov, and Orenburg. His siege is not yet over, however. He looks to the west. Given the political and economic confusion in the Russian Federation at this time, he knows that his troops will be able to conquer Saint Petersburg and Moscow shortly. Commander Votachev will then be able to rule with the wisdom and control exhibited by his communist predecessors Lenin and Stalin.
-
 
 Across the Pacific Ocean, a meeting of the top security and foreign policy advisers of the United States is in progress at the White House. The President has recently been briefed about the communist revolution masterminded by Commander Votachev and is determining a plan of action. The President reflects upon a similar October long ago in 1917, and he fears the possibility of a new age of radical Communist rule accompanied by chaos, bloodshed, escalating tensions, and possibly nuclear war. He therefore decides that the United States needs to respond and to respond quickly. Moscow has requested assistance from the United States military, and the President plans to send troops and supplies immediately.
 
@@ -92,7 +96,7 @@ and on the Eurasian leg:
 Given the distance and the speed of the transportation used between each pair of cities, how can the President most quickly move troops from the United States to each of the three strategic Russian cities?
 
 ### Dijkstra's shortest path model
-Since the question above is only concerned with the minimum time taken by the troops to reach Russia, we can model this problem as a *shortest path problem* with each edge length representing the time taken to travel from the source node to the target node. The problem can then be solved using *Dijkstra's shortest path algorithm*. We will use the helper classes and methods provided by the custom [solver](https://github.com/ayusbhar2/operations_research/tree/main/solver)[2] module to solve the problem.
+Since the question above is only concerned with the minimum time taken by the troops to reach Russia, we can model this problem as a *shortest path problem* with each edge length representing the time taken to travel from the source node to the target node. The problem can then be solved using *Dijkstra's shortest path algorithm*. We will use the helper classes and methods provided by the custom [solver](https://github.com/ayusbhar2/operations_research/tree/main/solver) module to solve the problem.
 
 
 ```python
@@ -1815,6 +1819,5 @@ obj_min_cost_flow.value
 As seen above, the optimal solution for the maximum cost flow problem shown above has a cost of **\$ 344,350,000**. By contrast, the optimal solution to the minimum cost flow model is **\$ 412,866,667**. This may seem counterintuitive because we expect that trying to minimize the total cost should give a smaller optimal value. However, the reason for the above disparity is that in the minimum cost flow problem, we were trying to satisfy the demand constraints at each of the three demand nodes - Saint Petersburg, Moscow and Rostov. However, in the maximum flow problem, we relaxed these constraints and were able to achieve an overall cheaper solution!
 
 # References
-[1] Frederick S. Hillier and Gerald J. Lieberman.  *Introduction to Operations Research - 7th ed.*, McGraw-Hill, ISBN 0-07-232169-5
 
-[2] Code available at URL: https://github.com/ayusbhar2/operations_research/tree/main/solver
+Code available at URL: https://github.com/ayusbhar2/operations_research/tree/main/solver
