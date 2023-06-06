@@ -744,6 +744,8 @@ df.style.applymap(cond_formatting)
 
 The above result confirms what we already knew from the previous section - the fastest path from Boston to StPetersburg is `Boston --> London --> Saint Petersburg (12.70 hr)`. We can solve similar fomulations for each source-target pair to get the desired results.
 
+It should not come as a surprise that the above problem could be modeled both as a BIP and a Dijkstra's shortest path problem. In fact both these problems are solved using an algorithm paradigm called **Dynamic Programming**.
+
 It is worth noting that most BIP solvers use some variation of the Branch and Bound algorithm which recursively solves repeated LP relaxations of the original BIP with the simplex method. Since the simplex algorithm is a polynomial time algorithm, the average total running time for the original BIP is close to polynomial in the size of the problem (i.e. number of variables). Let $$N: = $$number of vertices and $$M:=$$ number of edges in the graph. Then, from the above formulation, we note that the total number of variables is $$M + N$$. The average running time of the Branch and Bound algorithm is given by $$O(M + N)^p$$, $$p > 1$$. On the other hand, Dijkstra's shortest path algorithm has a running time of $$O(MN)$$.
 
 However, while the BIP formulation only works for a single source-destination pair at a time, Dijkstra's algorithm can return the shortest path from a source node to *all* the other nodes in a single run. Hence, for larger problems, it may be advantageous to use Dijkstra's algortihm instead of a BIP formulation.
