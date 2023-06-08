@@ -58,9 +58,9 @@
   <h1><a href="/network-optimization-case-study/">Network Optimization Case Study: Aiding Allies</a></h1><time datetime="2023-06-05T00:00:00-07:00">June 05, 2023</time>
 </header>
 
-  <p>[Source: Frederick S. Hillier and Gerald J. Lieberman.  <em>Introduction to Operations Research - 7th ed.</em>, McGraw-Hill, ISBN 0-07-232169-5]</p>
+  <p>[Source: Frederick S. Hillier and Gerald J. Lieberman.  <em>Introduction to Operations Research - 7th ed.</em>, 2000, McGraw-Hill, ISBN 0-07-232169-5]</p>
 
-<p>A rebel army is attempting to overthrow the elected government of the Russian Federation. The United Sttates government has decided to assist its ally by quickly sending troops and supplies to the Federation. A plan needs to be developed for shipping the troops and supplies most effectively. Depending on the overall measure of performance, the analysis requires formulating and solving a shortest-path problem, a minimum cost flow problem, or a maximum flow problem.</p>
+<p>A rebel army is attempting to overthrow the elected government of the Russian Federation. The United States government has decided to assist its ally by quickly sending troops and supplies to the Federation. A plan needs to be developed for shipping the troops and supplies most effectively. Depending on the overall measure of performance, the analysis requires formulating and solving a shortest-path problem, a minimum cost flow problem, or a maximum flow problem.</p>
 
 <hr />
 <p>Commander Votachev steps into the cold October night and deeply inhales the smoke from his cigarette, savoring its warmth. He surveys the destruction surrounding him — shattered windows, burning buildings, torn roads — and smiles. His two years of work training revolutionaries east of the Ural Mountains has proved successful; his troops now occupy seven strategically important cities in the Russian Federation: Kazan, Perm,Yekaterinburg, Ufa, Samara, Saratov, and Orenburg. His siege is not yet over, however. He looks to the west. Given the political and economic confusion in the Russian Federation at this time, he knows that his troops will be able to conquer Saint Petersburg and Moscow shortly. Commander Votachev will then be able to rule with the wisdom and control exhibited by his communist predecessors Lenin and Stalin.</p>
@@ -332,15 +332,19 @@
 <p>Given the distance and the speed of the transportation used between each pair of cities, how can the President most quickly move troops from the United States to each of the three strategic Russian cities?</p>
 
 <h3 id="dijkstras-shortest-path-model">Dijkstra’s shortest path model</h3>
-<p>Since the question above is only concerned with the minimum time taken by the troops to reach Russia, we can model this problem as a <em>shortest path problem</em> with each edge length representing the time taken to travel from the source node to the target node. The problem can then be solved using <em>Dijkstra’s shortest path algorithm</em>. We will use the helper classes and methods provided by the custom <a href="https://github.com/ayusbhar2/operations_research/tree/main/solver">solver</a> module to solve the problem.</p>
+<p>Since Question 1 is only concerned with the minimum time taken by the troops to reach Russia, we can model this problem as a <em>shortest path problem</em> with each edge length representing the time taken to travel from the source node to the target node. The problem can then be solved using <em>Dijkstra’s shortest path algorithm</em>. We will use the helper classes and methods provided by the custom <a href="https://github.com/ayusbhar2/operations_research/tree/main/solver">solver</a> module to solve the problem.</p>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># my solver module
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="c1"># my solver module
 </span><span class="kn">from</span> <span class="nn">solver.algorithms</span> <span class="kn">import</span> <span class="n">get_shortest_path</span>
 <span class="kn">from</span> <span class="nn">solver.classes</span> <span class="kn">import</span> <span class="n">Edge</span><span class="p">,</span> <span class="n">Graph</span>
 <span class="kn">from</span> <span class="nn">solver.utils</span> <span class="kn">import</span> <span class="n">get_result_summary</span><span class="p">,</span> <span class="n">get_variable</span><span class="p">,</span> <span class="n">prettify</span>
 </code></pre></div></div>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">AIR_SPEED_KMPH</span> <span class="o">=</span> <span class="mi">400</span> <span class="o">*</span> <span class="mf">1.60934</span>  <span class="c1"># from MPH to KMPH
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
+
+<span class="n">AIR_SPEED_KMPH</span> <span class="o">=</span> <span class="mi">400</span> <span class="o">*</span> <span class="mf">1.60934</span>  <span class="c1"># from MPH to KMPH
 </span><span class="n">WATER_SPEED_KMPH</span> <span class="o">=</span> <span class="mi">35</span> <span class="o">*</span> <span class="mf">1.60934</span>
 <span class="n">LAND_SPEED_KMPH</span> <span class="o">=</span> <span class="mi">60</span> <span class="o">*</span> <span class="mf">1.60934</span>
 </code></pre></div></div>
@@ -610,37 +614,37 @@
                                      CVXPY                                     
                                      v1.3.1                                    
 ===============================================================================
-(CVXPY) Jun 05 02:22:40 PM: Your problem has 41 variables, 69 constraints, and 0 parameters.
-(CVXPY) Jun 05 02:22:40 PM: It is compliant with the following grammars: DCP, DQCP
-(CVXPY) Jun 05 02:22:40 PM: (If you need to solve this problem multiple times, but with different data, consider using parameters.)
-(CVXPY) Jun 05 02:22:40 PM: CVXPY will first compile your problem; then, it will invoke a numerical solver to obtain a solution.
+(CVXPY) Jun 07 07:08:40 PM: Your problem has 41 variables, 69 constraints, and 0 parameters.
+(CVXPY) Jun 07 07:08:40 PM: It is compliant with the following grammars: DCP, DQCP
+(CVXPY) Jun 07 07:08:40 PM: (If you need to solve this problem multiple times, but with different data, consider using parameters.)
+(CVXPY) Jun 07 07:08:40 PM: CVXPY will first compile your problem; then, it will invoke a numerical solver to obtain a solution.
 -------------------------------------------------------------------------------
                                   Compilation                                  
 -------------------------------------------------------------------------------
-(CVXPY) Jun 05 02:22:40 PM: Compiling problem (target solver=GLPK_MI).
-(CVXPY) Jun 05 02:22:40 PM: Reduction chain: Dcp2Cone -&gt; CvxAttr2Constr -&gt; ConeMatrixStuffing -&gt; GLPK_MI
-(CVXPY) Jun 05 02:22:40 PM: Applying reduction Dcp2Cone
-(CVXPY) Jun 05 02:22:40 PM: Applying reduction CvxAttr2Constr
-(CVXPY) Jun 05 02:22:40 PM: Applying reduction ConeMatrixStuffing
-(CVXPY) Jun 05 02:22:40 PM: Applying reduction GLPK_MI
-(CVXPY) Jun 05 02:22:40 PM: Finished problem compilation (took 1.321e-01 seconds).
+(CVXPY) Jun 07 07:08:40 PM: Compiling problem (target solver=GLPK_MI).
+(CVXPY) Jun 07 07:08:40 PM: Reduction chain: Dcp2Cone -&gt; CvxAttr2Constr -&gt; ConeMatrixStuffing -&gt; GLPK_MI
+(CVXPY) Jun 07 07:08:40 PM: Applying reduction Dcp2Cone
+(CVXPY) Jun 07 07:08:40 PM: Applying reduction CvxAttr2Constr
+(CVXPY) Jun 07 07:08:40 PM: Applying reduction ConeMatrixStuffing
+(CVXPY) Jun 07 07:08:40 PM: Applying reduction GLPK_MI
+(CVXPY) Jun 07 07:08:40 PM: Finished problem compilation (took 1.239e-01 seconds).
 -------------------------------------------------------------------------------
                                 Numerical solver                               
 -------------------------------------------------------------------------------
-(CVXPY) Jun 05 02:22:40 PM: Invoking solver GLPK_MI  to obtain a solution.
+(CVXPY) Jun 07 07:08:40 PM: Invoking solver GLPK_MI  to obtain a solution.
 -------------------------------------------------------------------------------
                                     Summary                                    
 -------------------------------------------------------------------------------      0: obj =   0.000000000e+00 inf =   2.000e+00 (2)
-      6: obj =   1.325077361e+01 inf =   0.000e+00 (0)
+      7: obj =   1.270707246e+01 inf =   0.000e+00 (0)
+*    15: obj =   1.270707246e+01 inf =   0.000e+00 (0)
++    15: mip =     not found yet &gt;=              -inf        (1; 0)
++    15: &gt;&gt;&gt;&gt;&gt;   1.270707246e+01 &gt;=   1.270707246e+01   0.0% (1; 0)
++    15: mip =   1.270707246e+01 &gt;=     tree is empty   0.0% (0; 1)
 
-(CVXPY) Jun 05 02:22:40 PM: Problem status: optimal
-*    14: obj =   1.270707246e+01 inf =   0.000e+00 (0)
-+    14: mip =     not found yet &gt;=              -inf        (1; 0)
-+    14: &gt;&gt;&gt;&gt;&gt;   1.270707246e+01 &gt;=   1.270707246e+01   0.0% (1; 0)
-+    14: mip =   1.270707246e+01 &gt;=     tree is empty   0.0% (0; 1)
-(CVXPY) Jun 05 02:22:40 PM: Optimal value: 1.271e+01
-(CVXPY) Jun 05 02:22:40 PM: Compilation took 1.321e-01 seconds
-(CVXPY) Jun 05 02:22:40 PM: Solver (including time spent in interface) took 9.940e-04 seconds
+(CVXPY) Jun 07 07:08:40 PM: Problem status: optimal
+(CVXPY) Jun 07 07:08:40 PM: Optimal value: 1.271e+01
+(CVXPY) Jun 07 07:08:40 PM: Compilation took 1.239e-01 seconds
+(CVXPY) Jun 07 07:08:40 PM: Solver (including time spent in interface) took 8.249e-04 seconds
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">summary</span> <span class="o">=</span> <span class="n">get_result_summary</span><span class="p">(</span><span class="n">bip</span><span class="p">)</span>
@@ -665,12 +669,12 @@
 </code></pre></div></div>
 
 <style type="text/css">
-#T_72f6d_row1_col1, #T_72f6d_row5_col1, #T_72f6d_row10_col1, #T_72f6d_row17_col1, #T_72f6d_row34_col1 {
+#T_f391d_row1_col1, #T_f391d_row5_col1, #T_f391d_row10_col1, #T_f391d_row17_col1, #T_f391d_row34_col1 {
   background-color: lightgray;
 }
 </style>
 
-<table id="T_72f6d_">
+<table id="T_f391d_">
   <thead>
     <tr>
       <th class="blank level0">&nbsp;</th>
@@ -680,214 +684,216 @@
   </thead>
   <tbody>
     <tr>
-      <th id="T_72f6d_level0_row0" class="row_heading level0 row0">0</th>
-      <td id="T_72f6d_row0_col0" class="data row0 col0">x_Berlin</td>
-      <td id="T_72f6d_row0_col1" class="data row0 col1">0.000000</td>
+      <th id="T_f391d_level0_row0" class="row_heading level0 row0">0</th>
+      <td id="T_f391d_row0_col0" class="data row0 col0">x_Berlin</td>
+      <td id="T_f391d_row0_col1" class="data row0 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row1" class="row_heading level0 row1">1</th>
-      <td id="T_72f6d_row1_col0" class="data row1 col0">x_Boston</td>
-      <td id="T_72f6d_row1_col1" class="data row1 col1">1.000000</td>
+      <th id="T_f391d_level0_row1" class="row_heading level0 row1">1</th>
+      <td id="T_f391d_row1_col0" class="data row1 col0">x_Boston</td>
+      <td id="T_f391d_row1_col1" class="data row1 col1">1.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row2" class="row_heading level0 row2">2</th>
-      <td id="T_72f6d_row2_col0" class="data row2 col0">x_Hamburg</td>
-      <td id="T_72f6d_row2_col1" class="data row2 col1">0.000000</td>
+      <th id="T_f391d_level0_row2" class="row_heading level0 row2">2</th>
+      <td id="T_f391d_row2_col0" class="data row2 col0">x_Hamburg</td>
+      <td id="T_f391d_row2_col1" class="data row2 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row3" class="row_heading level0 row3">3</th>
-      <td id="T_72f6d_row3_col0" class="data row3 col0">x_Istanbul</td>
-      <td id="T_72f6d_row3_col1" class="data row3 col1">0.000000</td>
+      <th id="T_f391d_level0_row3" class="row_heading level0 row3">3</th>
+      <td id="T_f391d_row3_col0" class="data row3 col0">x_Istanbul</td>
+      <td id="T_f391d_row3_col1" class="data row3 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row4" class="row_heading level0 row4">4</th>
-      <td id="T_72f6d_row4_col0" class="data row4 col0">x_Jacksonville</td>
-      <td id="T_72f6d_row4_col1" class="data row4 col1">0.000000</td>
+      <th id="T_f391d_level0_row4" class="row_heading level0 row4">4</th>
+      <td id="T_f391d_row4_col0" class="data row4 col0">x_Jacksonville</td>
+      <td id="T_f391d_row4_col1" class="data row4 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row5" class="row_heading level0 row5">5</th>
-      <td id="T_72f6d_row5_col0" class="data row5 col0">x_London</td>
-      <td id="T_72f6d_row5_col1" class="data row5 col1">1.000000</td>
+      <th id="T_f391d_level0_row5" class="row_heading level0 row5">5</th>
+      <td id="T_f391d_row5_col0" class="data row5 col0">x_London</td>
+      <td id="T_f391d_row5_col1" class="data row5 col1">1.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row6" class="row_heading level0 row6">6</th>
-      <td id="T_72f6d_row6_col0" class="data row6 col0">x_Moscow</td>
-      <td id="T_72f6d_row6_col1" class="data row6 col1">0.000000</td>
+      <th id="T_f391d_level0_row6" class="row_heading level0 row6">6</th>
+      <td id="T_f391d_row6_col0" class="data row6 col0">x_Moscow</td>
+      <td id="T_f391d_row6_col1" class="data row6 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row7" class="row_heading level0 row7">7</th>
-      <td id="T_72f6d_row7_col0" class="data row7 col0">x_Napoli</td>
-      <td id="T_72f6d_row7_col1" class="data row7 col1">0.000000</td>
+      <th id="T_f391d_level0_row7" class="row_heading level0 row7">7</th>
+      <td id="T_f391d_row7_col0" class="data row7 col0">x_Napoli</td>
+      <td id="T_f391d_row7_col1" class="data row7 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row8" class="row_heading level0 row8">8</th>
-      <td id="T_72f6d_row8_col0" class="data row8 col0">x_Rostov</td>
-      <td id="T_72f6d_row8_col1" class="data row8 col1">0.000000</td>
+      <th id="T_f391d_level0_row8" class="row_heading level0 row8">8</th>
+      <td id="T_f391d_row8_col0" class="data row8 col0">x_Rostov</td>
+      <td id="T_f391d_row8_col1" class="data row8 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row9" class="row_heading level0 row9">9</th>
-      <td id="T_72f6d_row9_col0" class="data row9 col0">x_Rotterdam</td>
-      <td id="T_72f6d_row9_col1" class="data row9 col1">0.000000</td>
+      <th id="T_f391d_level0_row9" class="row_heading level0 row9">9</th>
+      <td id="T_f391d_row9_col0" class="data row9 col0">x_Rotterdam</td>
+      <td id="T_f391d_row9_col1" class="data row9 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row10" class="row_heading level0 row10">10</th>
-      <td id="T_72f6d_row10_col0" class="data row10 col0">x_StPetersburg</td>
-      <td id="T_72f6d_row10_col1" class="data row10 col1">1.000000</td>
+      <th id="T_f391d_level0_row10" class="row_heading level0 row10">10</th>
+      <td id="T_f391d_row10_col0" class="data row10 col0">x_StPetersburg</td>
+      <td id="T_f391d_row10_col1" class="data row10 col1">1.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row11" class="row_heading level0 row11">11</th>
-      <td id="T_72f6d_row11_col0" class="data row11 col0">y_Berlin_Moscow</td>
-      <td id="T_72f6d_row11_col1" class="data row11 col1">0.000000</td>
+      <th id="T_f391d_level0_row11" class="row_heading level0 row11">11</th>
+      <td id="T_f391d_row11_col0" class="data row11 col0">y_Berlin_Moscow</td>
+      <td id="T_f391d_row11_col1" class="data row11 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row12" class="row_heading level0 row12">12</th>
-      <td id="T_72f6d_row12_col0" class="data row12 col0">y_Berlin_Rostov</td>
-      <td id="T_72f6d_row12_col1" class="data row12 col1">0.000000</td>
+      <th id="T_f391d_level0_row12" class="row_heading level0 row12">12</th>
+      <td id="T_f391d_row12_col0" class="data row12 col0">y_Berlin_Rostov</td>
+      <td id="T_f391d_row12_col1" class="data row12 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row13" class="row_heading level0 row13">13</th>
-      <td id="T_72f6d_row13_col0" class="data row13 col0">y_Berlin_StPetersburg</td>
-      <td id="T_72f6d_row13_col1" class="data row13 col1">0.000000</td>
+      <th id="T_f391d_level0_row13" class="row_heading level0 row13">13</th>
+      <td id="T_f391d_row13_col0" class="data row13 col0">y_Berlin_StPetersburg</td>
+      <td id="T_f391d_row13_col1" class="data row13 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row14" class="row_heading level0 row14">14</th>
-      <td id="T_72f6d_row14_col0" class="data row14 col0">y_Boston_Berlin</td>
-      <td id="T_72f6d_row14_col1" class="data row14 col1">0.000000</td>
+      <th id="T_f391d_level0_row14" class="row_heading level0 row14">14</th>
+      <td id="T_f391d_row14_col0" class="data row14 col0">y_Boston_Berlin</td>
+      <td id="T_f391d_row14_col1" class="data row14 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row15" class="row_heading level0 row15">15</th>
-      <td id="T_72f6d_row15_col0" class="data row15 col0">y_Boston_Hamburg</td>
-      <td id="T_72f6d_row15_col1" class="data row15 col1">0.000000</td>
+      <th id="T_f391d_level0_row15" class="row_heading level0 row15">15</th>
+      <td id="T_f391d_row15_col0" class="data row15 col0">y_Boston_Hamburg</td>
+      <td id="T_f391d_row15_col1" class="data row15 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row16" class="row_heading level0 row16">16</th>
-      <td id="T_72f6d_row16_col0" class="data row16 col0">y_Boston_Istanbul</td>
-      <td id="T_72f6d_row16_col1" class="data row16 col1">0.000000</td>
+      <th id="T_f391d_level0_row16" class="row_heading level0 row16">16</th>
+      <td id="T_f391d_row16_col0" class="data row16 col0">y_Boston_Istanbul</td>
+      <td id="T_f391d_row16_col1" class="data row16 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row17" class="row_heading level0 row17">17</th>
-      <td id="T_72f6d_row17_col0" class="data row17 col0">y_Boston_London</td>
-      <td id="T_72f6d_row17_col1" class="data row17 col1">1.000000</td>
+      <th id="T_f391d_level0_row17" class="row_heading level0 row17">17</th>
+      <td id="T_f391d_row17_col0" class="data row17 col0">y_Boston_London</td>
+      <td id="T_f391d_row17_col1" class="data row17 col1">1.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row18" class="row_heading level0 row18">18</th>
-      <td id="T_72f6d_row18_col0" class="data row18 col0">y_Boston_Napoli</td>
-      <td id="T_72f6d_row18_col1" class="data row18 col1">0.000000</td>
+      <th id="T_f391d_level0_row18" class="row_heading level0 row18">18</th>
+      <td id="T_f391d_row18_col0" class="data row18 col0">y_Boston_Napoli</td>
+      <td id="T_f391d_row18_col1" class="data row18 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row19" class="row_heading level0 row19">19</th>
-      <td id="T_72f6d_row19_col0" class="data row19 col0">y_Boston_Rotterdam</td>
-      <td id="T_72f6d_row19_col1" class="data row19 col1">0.000000</td>
+      <th id="T_f391d_level0_row19" class="row_heading level0 row19">19</th>
+      <td id="T_f391d_row19_col0" class="data row19 col0">y_Boston_Rotterdam</td>
+      <td id="T_f391d_row19_col1" class="data row19 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row20" class="row_heading level0 row20">20</th>
-      <td id="T_72f6d_row20_col0" class="data row20 col0">y_Hamburg_Moscow</td>
-      <td id="T_72f6d_row20_col1" class="data row20 col1">0.000000</td>
+      <th id="T_f391d_level0_row20" class="row_heading level0 row20">20</th>
+      <td id="T_f391d_row20_col0" class="data row20 col0">y_Hamburg_Moscow</td>
+      <td id="T_f391d_row20_col1" class="data row20 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row21" class="row_heading level0 row21">21</th>
-      <td id="T_72f6d_row21_col0" class="data row21 col0">y_Hamburg_Rostov</td>
-      <td id="T_72f6d_row21_col1" class="data row21 col1">0.000000</td>
+      <th id="T_f391d_level0_row21" class="row_heading level0 row21">21</th>
+      <td id="T_f391d_row21_col0" class="data row21 col0">y_Hamburg_Rostov</td>
+      <td id="T_f391d_row21_col1" class="data row21 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row22" class="row_heading level0 row22">22</th>
-      <td id="T_72f6d_row22_col0" class="data row22 col0">y_Hamburg_StPetersburg</td>
-      <td id="T_72f6d_row22_col1" class="data row22 col1">0.000000</td>
+      <th id="T_f391d_level0_row22" class="row_heading level0 row22">22</th>
+      <td id="T_f391d_row22_col0" class="data row22 col0">y_Hamburg_StPetersburg</td>
+      <td id="T_f391d_row22_col1" class="data row22 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row23" class="row_heading level0 row23">23</th>
-      <td id="T_72f6d_row23_col0" class="data row23 col0">y_Istanbul_Moscow</td>
-      <td id="T_72f6d_row23_col1" class="data row23 col1">0.000000</td>
+      <th id="T_f391d_level0_row23" class="row_heading level0 row23">23</th>
+      <td id="T_f391d_row23_col0" class="data row23 col0">y_Istanbul_Moscow</td>
+      <td id="T_f391d_row23_col1" class="data row23 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row24" class="row_heading level0 row24">24</th>
-      <td id="T_72f6d_row24_col0" class="data row24 col0">y_Istanbul_Rostov</td>
-      <td id="T_72f6d_row24_col1" class="data row24 col1">0.000000</td>
+      <th id="T_f391d_level0_row24" class="row_heading level0 row24">24</th>
+      <td id="T_f391d_row24_col0" class="data row24 col0">y_Istanbul_Rostov</td>
+      <td id="T_f391d_row24_col1" class="data row24 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row25" class="row_heading level0 row25">25</th>
-      <td id="T_72f6d_row25_col0" class="data row25 col0">y_Istanbul_StPetersburg</td>
-      <td id="T_72f6d_row25_col1" class="data row25 col1">0.000000</td>
+      <th id="T_f391d_level0_row25" class="row_heading level0 row25">25</th>
+      <td id="T_f391d_row25_col0" class="data row25 col0">y_Istanbul_StPetersburg</td>
+      <td id="T_f391d_row25_col1" class="data row25 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row26" class="row_heading level0 row26">26</th>
-      <td id="T_72f6d_row26_col0" class="data row26 col0">y_Jacksonville_Berlin</td>
-      <td id="T_72f6d_row26_col1" class="data row26 col1">0.000000</td>
+      <th id="T_f391d_level0_row26" class="row_heading level0 row26">26</th>
+      <td id="T_f391d_row26_col0" class="data row26 col0">y_Jacksonville_Berlin</td>
+      <td id="T_f391d_row26_col1" class="data row26 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row27" class="row_heading level0 row27">27</th>
-      <td id="T_72f6d_row27_col0" class="data row27 col0">y_Jacksonville_Hamburg</td>
-      <td id="T_72f6d_row27_col1" class="data row27 col1">0.000000</td>
+      <th id="T_f391d_level0_row27" class="row_heading level0 row27">27</th>
+      <td id="T_f391d_row27_col0" class="data row27 col0">y_Jacksonville_Hamburg</td>
+      <td id="T_f391d_row27_col1" class="data row27 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row28" class="row_heading level0 row28">28</th>
-      <td id="T_72f6d_row28_col0" class="data row28 col0">y_Jacksonville_Istanbul</td>
-      <td id="T_72f6d_row28_col1" class="data row28 col1">0.000000</td>
+      <th id="T_f391d_level0_row28" class="row_heading level0 row28">28</th>
+      <td id="T_f391d_row28_col0" class="data row28 col0">y_Jacksonville_Istanbul</td>
+      <td id="T_f391d_row28_col1" class="data row28 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row29" class="row_heading level0 row29">29</th>
-      <td id="T_72f6d_row29_col0" class="data row29 col0">y_Jacksonville_London</td>
-      <td id="T_72f6d_row29_col1" class="data row29 col1">0.000000</td>
+      <th id="T_f391d_level0_row29" class="row_heading level0 row29">29</th>
+      <td id="T_f391d_row29_col0" class="data row29 col0">y_Jacksonville_London</td>
+      <td id="T_f391d_row29_col1" class="data row29 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row30" class="row_heading level0 row30">30</th>
-      <td id="T_72f6d_row30_col0" class="data row30 col0">y_Jacksonville_Napoli</td>
-      <td id="T_72f6d_row30_col1" class="data row30 col1">0.000000</td>
+      <th id="T_f391d_level0_row30" class="row_heading level0 row30">30</th>
+      <td id="T_f391d_row30_col0" class="data row30 col0">y_Jacksonville_Napoli</td>
+      <td id="T_f391d_row30_col1" class="data row30 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row31" class="row_heading level0 row31">31</th>
-      <td id="T_72f6d_row31_col0" class="data row31 col0">y_Jacksonville_Rotterdam</td>
-      <td id="T_72f6d_row31_col1" class="data row31 col1">0.000000</td>
+      <th id="T_f391d_level0_row31" class="row_heading level0 row31">31</th>
+      <td id="T_f391d_row31_col0" class="data row31 col0">y_Jacksonville_Rotterdam</td>
+      <td id="T_f391d_row31_col1" class="data row31 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row32" class="row_heading level0 row32">32</th>
-      <td id="T_72f6d_row32_col0" class="data row32 col0">y_London_Moscow</td>
-      <td id="T_72f6d_row32_col1" class="data row32 col1">0.000000</td>
+      <th id="T_f391d_level0_row32" class="row_heading level0 row32">32</th>
+      <td id="T_f391d_row32_col0" class="data row32 col0">y_London_Moscow</td>
+      <td id="T_f391d_row32_col1" class="data row32 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row33" class="row_heading level0 row33">33</th>
-      <td id="T_72f6d_row33_col0" class="data row33 col0">y_London_Rostov</td>
-      <td id="T_72f6d_row33_col1" class="data row33 col1">0.000000</td>
+      <th id="T_f391d_level0_row33" class="row_heading level0 row33">33</th>
+      <td id="T_f391d_row33_col0" class="data row33 col0">y_London_Rostov</td>
+      <td id="T_f391d_row33_col1" class="data row33 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row34" class="row_heading level0 row34">34</th>
-      <td id="T_72f6d_row34_col0" class="data row34 col0">y_London_StPetersburg</td>
-      <td id="T_72f6d_row34_col1" class="data row34 col1">1.000000</td>
+      <th id="T_f391d_level0_row34" class="row_heading level0 row34">34</th>
+      <td id="T_f391d_row34_col0" class="data row34 col0">y_London_StPetersburg</td>
+      <td id="T_f391d_row34_col1" class="data row34 col1">1.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row35" class="row_heading level0 row35">35</th>
-      <td id="T_72f6d_row35_col0" class="data row35 col0">y_Napoli_Moscow</td>
-      <td id="T_72f6d_row35_col1" class="data row35 col1">0.000000</td>
+      <th id="T_f391d_level0_row35" class="row_heading level0 row35">35</th>
+      <td id="T_f391d_row35_col0" class="data row35 col0">y_Napoli_Moscow</td>
+      <td id="T_f391d_row35_col1" class="data row35 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row36" class="row_heading level0 row36">36</th>
-      <td id="T_72f6d_row36_col0" class="data row36 col0">y_Napoli_Rostov</td>
-      <td id="T_72f6d_row36_col1" class="data row36 col1">0.000000</td>
+      <th id="T_f391d_level0_row36" class="row_heading level0 row36">36</th>
+      <td id="T_f391d_row36_col0" class="data row36 col0">y_Napoli_Rostov</td>
+      <td id="T_f391d_row36_col1" class="data row36 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row37" class="row_heading level0 row37">37</th>
-      <td id="T_72f6d_row37_col0" class="data row37 col0">y_Napoli_StPetersburg</td>
-      <td id="T_72f6d_row37_col1" class="data row37 col1">0.000000</td>
+      <th id="T_f391d_level0_row37" class="row_heading level0 row37">37</th>
+      <td id="T_f391d_row37_col0" class="data row37 col0">y_Napoli_StPetersburg</td>
+      <td id="T_f391d_row37_col1" class="data row37 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row38" class="row_heading level0 row38">38</th>
-      <td id="T_72f6d_row38_col0" class="data row38 col0">y_Rotterdam_Moscow</td>
-      <td id="T_72f6d_row38_col1" class="data row38 col1">0.000000</td>
+      <th id="T_f391d_level0_row38" class="row_heading level0 row38">38</th>
+      <td id="T_f391d_row38_col0" class="data row38 col0">y_Rotterdam_Moscow</td>
+      <td id="T_f391d_row38_col1" class="data row38 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row39" class="row_heading level0 row39">39</th>
-      <td id="T_72f6d_row39_col0" class="data row39 col0">y_Rotterdam_Rostov</td>
-      <td id="T_72f6d_row39_col1" class="data row39 col1">0.000000</td>
+      <th id="T_f391d_level0_row39" class="row_heading level0 row39">39</th>
+      <td id="T_f391d_row39_col0" class="data row39 col0">y_Rotterdam_Rostov</td>
+      <td id="T_f391d_row39_col1" class="data row39 col1">0.000000</td>
     </tr>
     <tr>
-      <th id="T_72f6d_level0_row40" class="row_heading level0 row40">40</th>
-      <td id="T_72f6d_row40_col0" class="data row40 col0">y_Rotterdam_StPetersburg</td>
-      <td id="T_72f6d_row40_col1" class="data row40 col1">0.000000</td>
+      <th id="T_f391d_level0_row40" class="row_heading level0 row40">40</th>
+      <td id="T_f391d_row40_col0" class="data row40 col0">y_Rotterdam_StPetersburg</td>
+      <td id="T_f391d_row40_col1" class="data row40 col1">0.000000</td>
     </tr>
   </tbody>
 </table>
 
 <p>The above result confirms what we already knew from the previous section - the fastest path from Boston to StPetersburg is <code class="language-plaintext highlighter-rouge">Boston --&gt; London --&gt; Saint Petersburg (12.70 hr)</code>. We can solve similar fomulations for each source-target pair to get the desired results.</p>
+
+<p>It should not come as a surprise that the above problem could be modeled both as a BIP and a Dijkstra’s shortest path problem. In fact both these problems are solved using an algorithm that falls into the <strong>Dynamic Programming</strong> paradigm.</p>
 
 <p>It is worth noting that most BIP solvers use some variation of the Branch and Bound algorithm which recursively solves repeated LP relaxations of the original BIP with the simplex method. Since the simplex algorithm is a polynomial time algorithm, the average total running time for the original BIP is close to polynomial in the size of the problem (i.e. number of variables). Let \(N: =\)number of vertices and \(M:=\) number of edges in the graph. Then, from the above formulation, we note that the total number of variables is \(M + N\). The average running time of the Branch and Bound algorithm is given by \(O(M + N)^p\), \(p &gt; 1\). On the other hand, Dijkstra’s shortest path algorithm has a running time of \(O(MN)\).</p>
 
@@ -1099,7 +1105,7 @@
 
 <p>How does the President satisfy each Russian city’s military requirements at minimum cost?</p>
 
-<h3 id="the-minimum-cost-flow-model">The minimum cost flow model</h3>
+<h3 id="an-lp-model">An LP model</h3>
 
 <p>Our scenario lends itself well to a standard minimum cost flow formulation. Boston and Jacksonville are the <em>supply nodes</em>, Saint Petersburg, Moscow and Rostov are the <em>demand nodes</em> and every other node is a <em>transshipment node</em>. Each edge has a cost per unit of cargo associated with it, and some of the edges have maximum capacities as specified in the scenario.</p>
 
@@ -1246,36 +1252,36 @@
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Edge | Route_Type | Cost($/ton) | Limit(tons)
 ---- | ---------- | ----------- | -----------
-Jacksonville-London | air | 327.0 | inf
+Jacksonville-Istanbul | air | 407.0 | inf
+Hamburg-Rostov | land | 438.0 | 40000
+Jacksonville-Berlin | air | 380.0 | inf
+London-StPetersburg | air | 147.0 | inf
+Hamburg-StPetersburg | land | 188.0 | 0
+London-Rostov | air | 27.0 | 30000
+Napoli-Moscow | land | 312.0 | inf
+Boston-Istanbul | air | 367.0 | inf
+Jacksonville-Rotterdam | sea | 183.0 | inf
+Boston-Berlin | air | 333.0 | inf
+Boston-Napoli | sea | 133.0 | inf
+Jacksonville-Hamburg | sea | 200.0 | inf
+Hamburg-Moscow | land | 250.0 | inf
+Rotterdam-Moscow | land | 312.0 | inf
+Napoli-Rostov | land | 562.0 | 40000
+Istanbul-Moscow | air | 167.0 | inf
+Rotterdam-Rostov | land | 500.0 | 40000
+Boston-London | air | 300.0 | inf
+London-Moscow | air | 127.0 | inf
 Boston-Rotterdam | sea | 125.0 | inf
 Berlin-StPetersburg | air | 160.0 | inf
-Berlin-Rostov | air | 153.0 | 30000
-Rotterdam-Moscow | land | 312.0 | inf
-Boston-Napoli | sea | 133.0 | inf
-Jacksonville-Istanbul | air | 407.0 | inf
-Istanbul-Moscow | air | 167.0 | inf
-Boston-London | air | 300.0 | inf
-Hamburg-Moscow | land | 250.0 | inf
-Istanbul-Rostov | air | 13.0 | inf
-Jacksonville-Berlin | air | 380.0 | inf
-Boston-Berlin | air | 333.0 | inf
-Rotterdam-StPetersburg | land | 188.0 | 0
-Boston-Hamburg | sea | 125.0 | inf
-Hamburg-Rostov | land | 438.0 | 40000
-Rotterdam-Rostov | land | 500.0 | 40000
-Napoli-StPetersburg | land | 312.0 | 0
-Jacksonville-Hamburg | sea | 200.0 | inf
-Berlin-Moscow | air | 147.0 | inf
-Napoli-Rostov | land | 562.0 | 40000
-Istanbul-StPetersburg | air | 187.0 | inf
 Jacksonville-Napoli | sea | 233.0 | inf
-London-Moscow | air | 127.0 | inf
-Boston-Istanbul | air | 367.0 | inf
-Napoli-Moscow | land | 312.0 | inf
-Hamburg-StPetersburg | land | 188.0 | 0
-London-StPetersburg | air | 147.0 | inf
-Jacksonville-Rotterdam | sea | 183.0 | inf
-London-Rostov | air | 27.0 | 30000
+Napoli-StPetersburg | land | 312.0 | 0
+Jacksonville-London | air | 327.0 | inf
+Berlin-Rostov | air | 153.0 | 30000
+Rotterdam-StPetersburg | land | 188.0 | 0
+Berlin-Moscow | air | 147.0 | inf
+Istanbul-Rostov | air | 13.0 | inf
+Istanbul-StPetersburg | air | 187.0 | inf
+Boston-Hamburg | sea | 125.0 | inf
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Variables
@@ -1290,36 +1296,36 @@ London-Rostov | air | 27.0 | 30000
 <span class="p">[</span><span class="n">v</span><span class="p">.</span><span class="n">name</span><span class="p">()</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">variables</span><span class="p">]</span>
 </code></pre></div></div>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>['x_Jacksonville_London',
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>['x_Jacksonville_Istanbul',
+ 'x_Hamburg_Rostov',
+ 'x_Jacksonville_Berlin',
+ 'x_London_StPetersburg',
+ 'x_Hamburg_StPetersburg',
+ 'x_London_Rostov',
+ 'x_Napoli_Moscow',
+ 'x_Boston_Istanbul',
+ 'x_Jacksonville_Rotterdam',
+ 'x_Boston_Berlin',
+ 'x_Boston_Napoli',
+ 'x_Jacksonville_Hamburg',
+ 'x_Hamburg_Moscow',
+ 'x_Rotterdam_Moscow',
+ 'x_Napoli_Rostov',
+ 'x_Istanbul_Moscow',
+ 'x_Rotterdam_Rostov',
+ 'x_Boston_London',
+ 'x_London_Moscow',
  'x_Boston_Rotterdam',
  'x_Berlin_StPetersburg',
- 'x_Berlin_Rostov',
- 'x_Rotterdam_Moscow',
- 'x_Boston_Napoli',
- 'x_Jacksonville_Istanbul',
- 'x_Istanbul_Moscow',
- 'x_Boston_London',
- 'x_Hamburg_Moscow',
- 'x_Istanbul_Rostov',
- 'x_Jacksonville_Berlin',
- 'x_Boston_Berlin',
- 'x_Rotterdam_StPetersburg',
- 'x_Boston_Hamburg',
- 'x_Hamburg_Rostov',
- 'x_Rotterdam_Rostov',
- 'x_Napoli_StPetersburg',
- 'x_Jacksonville_Hamburg',
- 'x_Berlin_Moscow',
- 'x_Napoli_Rostov',
- 'x_Istanbul_StPetersburg',
  'x_Jacksonville_Napoli',
- 'x_London_Moscow',
- 'x_Boston_Istanbul',
- 'x_Napoli_Moscow',
- 'x_Hamburg_StPetersburg',
- 'x_London_StPetersburg',
- 'x_Jacksonville_Rotterdam',
- 'x_London_Rostov']
+ 'x_Napoli_StPetersburg',
+ 'x_Jacksonville_London',
+ 'x_Berlin_Rostov',
+ 'x_Rotterdam_StPetersburg',
+ 'x_Berlin_Moscow',
+ 'x_Istanbul_Rostov',
+ 'x_Istanbul_StPetersburg',
+ 'x_Boston_Hamburg']
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Objective
@@ -1392,43 +1398,43 @@ London-Rostov | air | 27.0 | 30000
                                      CVXPY                                     
                                      v1.3.1                                    
 ===============================================================================
-(CVXPY) Jun 05 02:22:41 PM: Your problem has 30 variables, 41 constraints, and 0 parameters.
-(CVXPY) Jun 05 02:22:41 PM: It is compliant with the following grammars: DCP, DQCP
-(CVXPY) Jun 05 02:22:41 PM: (If you need to solve this problem multiple times, but with different data, consider using parameters.)
-(CVXPY) Jun 05 02:22:41 PM: CVXPY will first compile your problem; then, it will invoke a numerical solver to obtain a solution.
+(CVXPY) Jun 07 07:08:40 PM: Your problem has 30 variables, 41 constraints, and 0 parameters.
+(CVXPY) Jun 07 07:08:40 PM: It is compliant with the following grammars: DCP, DQCP
+(CVXPY) Jun 07 07:08:40 PM: (If you need to solve this problem multiple times, but with different data, consider using parameters.)
+(CVXPY) Jun 07 07:08:40 PM: CVXPY will first compile your problem; then, it will invoke a numerical solver to obtain a solution.
 -------------------------------------------------------------------------------
                                   Compilation                                  
 -------------------------------------------------------------------------------
-(CVXPY) Jun 05 02:22:41 PM: Compiling problem (target solver=GLPK).
-(CVXPY) Jun 05 02:22:41 PM: Reduction chain: Dcp2Cone -&gt; CvxAttr2Constr -&gt; ConeMatrixStuffing -&gt; GLPK
-(CVXPY) Jun 05 02:22:41 PM: Applying reduction Dcp2Cone
-(CVXPY) Jun 05 02:22:41 PM: Applying reduction CvxAttr2Constr
-(CVXPY) Jun 05 02:22:41 PM: Applying reduction ConeMatrixStuffing
-(CVXPY) Jun 05 02:22:41 PM: Applying reduction GLPK
-(CVXPY) Jun 05 02:22:41 PM: Finished problem compilation (took 1.010e-01 seconds).
+(CVXPY) Jun 07 07:08:40 PM: Compiling problem (target solver=GLPK).
+(CVXPY) Jun 07 07:08:40 PM: Reduction chain: Dcp2Cone -&gt; CvxAttr2Constr -&gt; ConeMatrixStuffing -&gt; GLPK
+(CVXPY) Jun 07 07:08:40 PM: Applying reduction Dcp2Cone
+(CVXPY) Jun 07 07:08:40 PM: Applying reduction CvxAttr2Constr
+(CVXPY) Jun 07 07:08:40 PM: Applying reduction ConeMatrixStuffing
+(CVXPY) Jun 07 07:08:40 PM: Applying reduction GLPK
+(CVXPY) Jun 07 07:08:40 PM: Finished problem compilation (took 1.044e-01 seconds).
 -------------------------------------------------------------------------------
                                 Numerical solver                               
 -------------------------------------------------------------------------------
-(CVXPY) Jun 05 02:22:41 PM: Invoking solver GLPK  to obtain a solution.
+(CVXPY) Jun 07 07:08:40 PM: Invoking solver GLPK  to obtain a solution.
 -------------------------------------------------------------------------------
                                     Summary                                    
 -------------------------------------------------------------------------------
-(CVXPY) Jun 05 02:22:41 PM: Problem status: optimal
+(CVXPY) Jun 07 07:08:40 PM: Problem status: optimal
 GLPK Simplex Optimizer 5.0
 71 rows, 30 columns, 120 non-zeros
       0: obj =               nan inf =   2.000e+06 (5)
-     13: obj =               nan inf =   0.000e+00 (0)
-*    34: obj =               nan inf =   0.000e+00 (0)
+      5: obj =               nan inf =   0.000e+00 (0)
+*    31: obj =               nan inf =   0.000e+00 (0)
 OPTIMAL LP SOLUTION FOUND
-(CVXPY) Jun 05 02:22:41 PM: Optimal value: 4.129e+08
-(CVXPY) Jun 05 02:22:41 PM: Compilation took 1.010e-01 seconds
-(CVXPY) Jun 05 02:22:41 PM: Solver (including time spent in interface) took 4.974e-03 seconds
+(CVXPY) Jun 07 07:08:40 PM: Optimal value: 4.129e+08
+(CVXPY) Jun 07 07:08:40 PM: Compilation took 1.044e-01 seconds
+(CVXPY) Jun 07 07:08:40 PM: Solver (including time spent in interface) took 7.927e-04 seconds
 
 
 
 
 
-412866666.6666667
+412866666.6666666
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">summary</span> <span class="o">=</span> <span class="n">get_result_summary</span><span class="p">(</span><span class="n">prob_min_cost_flow</span><span class="p">)</span>
@@ -1443,7 +1449,7 @@ OPTIMAL LP SOLUTION FOUND
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">summary</span><span class="p">[</span><span class="s">'optimal_value'</span><span class="p">]</span>
 </code></pre></div></div>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>412866666.6666667
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>412866666.6666666
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span> <span class="o">=</span> <span class="n">prettify</span><span class="p">(</span><span class="n">summary</span><span class="p">[</span><span class="s">'optimal_solution'</span><span class="p">])</span>
@@ -1661,7 +1667,7 @@ The President realizes that because of all the restrictions <strong>he will not 
 
 <p>How does the President maximize the total amount of cargo that reaches the Russian Federation?</p>
 
-<h3 id="the-maximum-flow-model">The maximum flow model</h3>
+<h3 id="an-lp-formulation">An LP formulation</h3>
 
 <p>The current scenario appears very similar to the standard <em>Maximum Flow</em> problem where we want to maximize the flow through a network while honoring the capacity of each edge in the network. Next, we note that <strong>the maximum flow problem is just a special case of the minimum cost flow problem</strong> and we can reuse the model in the previous section with the following modifications.</p>
 <ol>
@@ -1697,9 +1703,10 @@ The President realizes that because of all the restrictions <strong>he will not 
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Initialize all edge capacities to infinity
 </span><span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">graph</span><span class="p">.</span><span class="n">edges</span><span class="p">:</span>
+    <span class="n">edge</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="n">capacity_vehicle_units</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">inf</span><span class="p">)</span>
     <span class="n">edge</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="n">capacity_tons</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">inf</span><span class="p">)</span>
     
-<span class="c1"># Assign edge cpacities
+<span class="c1"># Assign edge cpacities in vehicle count and tons
 </span><span class="n">EDGE_CAPACITIES_IN_VEHICLE_NUMS</span> <span class="o">=</span> <span class="p">{</span>
     <span class="p">(</span><span class="s">'Boston'</span><span class="p">,</span> <span class="s">'Berlin'</span><span class="p">):</span> <span class="mi">300</span><span class="p">,</span>
     <span class="p">(</span><span class="s">'Boston'</span><span class="p">,</span> <span class="s">'Istanbul'</span><span class="p">):</span> <span class="mi">500</span><span class="p">,</span>
@@ -1726,10 +1733,12 @@ The President realizes that because of all the restrictions <strong>he will not 
 <span class="p">}</span>
 <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">EDGE_CAPACITIES_IN_VEHICLE_NUMS</span><span class="p">.</span><span class="n">items</span><span class="p">():</span>
     <span class="n">edge</span> <span class="o">=</span> <span class="n">graph</span><span class="p">.</span><span class="n">get_edge</span><span class="p">(</span><span class="n">k</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">k</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
-    <span class="n">route_type</span> <span class="o">=</span> <span class="n">edge</span><span class="p">.</span><span class="n">route_type</span>
-    <span class="n">vehicle</span> <span class="o">=</span> <span class="n">ROUTE_TYPE_TO_VEHICLE</span><span class="p">[</span><span class="n">route_type</span><span class="p">]</span>
+    <span class="n">edge</span><span class="p">.</span><span class="n">capacity_vehicle_units</span> <span class="o">=</span> <span class="n">c</span>
+
+    <span class="n">vehicle</span> <span class="o">=</span> <span class="n">ROUTE_TYPE_TO_VEHICLE</span><span class="p">[</span><span class="n">edge</span><span class="p">.</span><span class="n">route_type</span><span class="p">]</span>
     <span class="n">vehicle_capacity_tons</span> <span class="o">=</span> <span class="n">VEHICLE_CAPACITY_TONS</span><span class="p">[</span><span class="n">vehicle</span><span class="p">]</span>
-    <span class="n">edge_capacity_tons</span> <span class="o">=</span> <span class="n">c</span> <span class="o">*</span> <span class="n">vehicle_capacity_tons</span>
+
+    <span class="n">edge_capacity_tons</span> <span class="o">=</span> <span class="n">edge</span><span class="p">.</span><span class="n">capacity_vehicle_units</span> <span class="o">*</span> <span class="n">vehicle_capacity_tons</span>
     <span class="n">edge</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="n">capacity_tons</span><span class="o">=</span><span class="n">edge_capacity_tons</span><span class="p">)</span>
 </code></pre></div></div>
 
@@ -1741,60 +1750,66 @@ The President realizes that because of all the restrictions <strong>he will not 
     <span class="k">exec</span><span class="p">(</span><span class="s">'variables.append(x_{s}_{t})'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span>
         <span class="n">s</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">source</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">name</span><span class="p">))</span>
 
-<span class="p">[</span><span class="n">v</span><span class="p">.</span><span class="n">name</span><span class="p">()</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">variables</span><span class="p">]</span>
+<span class="nb">sorted</span><span class="p">([</span><span class="n">v</span><span class="p">.</span><span class="n">name</span><span class="p">()</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">variables</span><span class="p">])</span>
 </code></pre></div></div>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>['x_Jacksonville_London',
- 'x_Boston_Rotterdam',
- 'x_Berlin_StPetersburg',
- 'x_StPetersburg_T',
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>['x_Berlin_Moscow',
  'x_Berlin_Rostov',
- 'x_Rotterdam_Moscow',
- 'x_Boston_Napoli',
- 'x_Jacksonville_Istanbul',
- 'x_Istanbul_Moscow',
- 'x_S_T',
- 'x_Boston_London',
- 'x_Hamburg_Moscow',
- 'x_Istanbul_Rostov',
- 'x_Rostov_T',
- 'x_Jacksonville_Berlin',
+ 'x_Berlin_StPetersburg',
  'x_Boston_Berlin',
- 'x_Rotterdam_StPetersburg',
  'x_Boston_Hamburg',
- 'x_Hamburg_Rostov',
- 'x_Rotterdam_Rostov',
- 'x_Napoli_StPetersburg',
- 'x_Moscow_T',
- 'x_Jacksonville_Hamburg',
- 'x_S_Boston',
- 'x_Berlin_Moscow',
- 'x_Napoli_Rostov',
- 'x_S_Jacksonville',
- 'x_Istanbul_StPetersburg',
- 'x_Jacksonville_Napoli',
- 'x_London_Moscow',
  'x_Boston_Istanbul',
- 'x_Napoli_Moscow',
+ 'x_Boston_London',
+ 'x_Boston_Napoli',
+ 'x_Boston_Rotterdam',
+ 'x_Hamburg_Moscow',
+ 'x_Hamburg_Rostov',
  'x_Hamburg_StPetersburg',
- 'x_London_StPetersburg',
+ 'x_Istanbul_Moscow',
+ 'x_Istanbul_Rostov',
+ 'x_Istanbul_StPetersburg',
+ 'x_Jacksonville_Berlin',
+ 'x_Jacksonville_Hamburg',
+ 'x_Jacksonville_Istanbul',
+ 'x_Jacksonville_London',
+ 'x_Jacksonville_Napoli',
  'x_Jacksonville_Rotterdam',
- 'x_London_Rostov']
+ 'x_London_Moscow',
+ 'x_London_Rostov',
+ 'x_London_StPetersburg',
+ 'x_Moscow_T',
+ 'x_Napoli_Moscow',
+ 'x_Napoli_Rostov',
+ 'x_Napoli_StPetersburg',
+ 'x_Rostov_T',
+ 'x_Rotterdam_Moscow',
+ 'x_Rotterdam_Rostov',
+ 'x_Rotterdam_StPetersburg',
+ 'x_S_Boston',
+ 'x_S_Jacksonville',
+ 'x_S_T',
+ 'x_StPetersburg_T']
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Objective
 </span><span class="n">obj_str</span> <span class="o">=</span> <span class="s">''</span>
-<span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">graph</span><span class="p">.</span><span class="n">edges</span><span class="p">:</span>
-    <span class="n">cost</span> <span class="o">=</span> <span class="n">edge</span><span class="p">.</span><span class="n">cost_per_ton</span>
-    <span class="n">obj_str</span> <span class="o">+=</span> <span class="s">'+ {c} * x_{s}_{t}'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">s</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">source</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="n">cost</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">graph</span><span class="p">.</span><span class="n">edges</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">.</span><span class="n">source</span><span class="p">.</span><span class="n">name</span><span class="p">):</span>
+    <span class="n">obj_str</span> <span class="o">+=</span> <span class="s">'+ {c} * x_{s}_{t}'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span>
+        <span class="n">s</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">source</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">cost_per_ton</span><span class="p">)</span>
     
 <span class="k">exec</span><span class="p">(</span><span class="s">'obj_max_flow = cp.Minimize({})'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">obj_str</span><span class="p">))</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="n">obj_max_flow</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>minimize 0.0 @ x_Berlin_StPetersburg + 0.0 @ x_Berlin_Rostov + 0.0 @ x_Berlin_Moscow + 0.0 @ x_Boston_Istanbul + 0.0 @ x_Boston_Berlin + 0.0 @ x_Boston_Napoli + 0.0 @ x_Boston_London + 0.0 @ x_Boston_Rotterdam + 0.0 @ x_Boston_Hamburg + 0.0 @ x_Hamburg_Rostov + 0.0 @ x_Hamburg_StPetersburg + 0.0 @ x_Hamburg_Moscow + 0.0 @ x_Istanbul_Moscow + 0.0 @ x_Istanbul_Rostov + 0.0 @ x_Istanbul_StPetersburg + 0.0 @ x_Jacksonville_Istanbul + 0.0 @ x_Jacksonville_Berlin + 0.0 @ x_Jacksonville_Rotterdam + 0.0 @ x_Jacksonville_Hamburg + 0.0 @ x_Jacksonville_Napoli + 0.0 @ x_Jacksonville_London + 0.0 @ x_London_StPetersburg + 0.0 @ x_London_Rostov + 0.0 @ x_London_Moscow + 0.0 @ x_Moscow_T + 0.0 @ x_Napoli_Moscow + 0.0 @ x_Napoli_Rostov + 0.0 @ x_Napoli_StPetersburg + 0.0 @ x_Rostov_T + 0.0 @ x_Rotterdam_Moscow + 0.0 @ x_Rotterdam_Rostov + 0.0 @ x_Rotterdam_StPetersburg + 10000000000.0 @ x_S_T + 0.0 @ x_S_Jacksonville + 0.0 @ x_S_Boston + 0.0 @ x_StPetersburg_T
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Constraints
 ## Update the node flow constraints
 </span><span class="n">node_flow_constraints</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">graph</span><span class="p">.</span><span class="n">vertices</span><span class="p">:</span>
+<span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">graph</span><span class="p">.</span><span class="n">vertices</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">.</span><span class="n">name</span><span class="p">):</span>
     <span class="k">if</span> <span class="n">v</span><span class="p">.</span><span class="n">name</span> <span class="o">==</span> <span class="s">'S'</span><span class="p">:</span>  <span class="c1"># supply node
 </span>        <span class="n">b</span> <span class="o">=</span> <span class="n">SUPPLY_UPPER_BOUND_TONS</span>
     <span class="k">elif</span> <span class="n">v</span><span class="p">.</span><span class="n">name</span> <span class="o">==</span> <span class="s">'T'</span><span class="p">:</span>  <span class="c1"># demand node
@@ -1824,91 +1839,91 @@ The President realizes that because of all the restrictions <strong>he will not 
     <span class="k">print</span><span class="p">(</span><span class="s">'{}</span><span class="se">\n</span><span class="s">'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">constr</span><span class="p">))</span>   
 </code></pre></div></div>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Vertex: Rotterdam
-x_Rotterdam_Moscow + x_Rotterdam_StPetersburg + x_Rotterdam_Rostov + -x_Boston_Rotterdam + -x_Jacksonville_Rotterdam == 0.0
-
-Vertex: Boston
-x_Boston_Rotterdam + x_Boston_Napoli + x_Boston_London + x_Boston_Berlin + x_Boston_Hamburg + x_Boston_Istanbul + -x_S_Boston == 0.0
-
-Vertex: S
-x_S_T + x_S_Boston + x_S_Jacksonville == 1000000.0
-
-Vertex: Moscow
-x_Moscow_T + -x_Rotterdam_Moscow + -x_Istanbul_Moscow + -x_Hamburg_Moscow + -x_Berlin_Moscow + -x_London_Moscow + -x_Napoli_Moscow == 0.0
-
-Vertex: Jacksonville
-x_Jacksonville_London + x_Jacksonville_Istanbul + x_Jacksonville_Berlin + x_Jacksonville_Hamburg + x_Jacksonville_Napoli + x_Jacksonville_Rotterdam + -x_S_Jacksonville == 0.0
-
-Vertex: London
-x_London_Moscow + x_London_StPetersburg + x_London_Rostov + -x_Jacksonville_London + -x_Boston_London == 0.0
-
-Vertex: T
--x_StPetersburg_T + -x_S_T + -x_Rostov_T + -x_Moscow_T == -1000000.0
-
-Vertex: Berlin
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Vertex: Berlin
 x_Berlin_StPetersburg + x_Berlin_Rostov + x_Berlin_Moscow + -x_Jacksonville_Berlin + -x_Boston_Berlin == 0.0
 
-Vertex: Rostov
-x_Rostov_T + -x_Berlin_Rostov + -x_Istanbul_Rostov + -x_Hamburg_Rostov + -x_Rotterdam_Rostov + -x_Napoli_Rostov + -x_London_Rostov == 0.0
+Vertex: Boston
+x_Boston_Istanbul + x_Boston_Berlin + x_Boston_Napoli + x_Boston_London + x_Boston_Rotterdam + x_Boston_Hamburg + -x_S_Boston == 0.0
 
 Vertex: Hamburg
-x_Hamburg_Moscow + x_Hamburg_Rostov + x_Hamburg_StPetersburg + -x_Boston_Hamburg + -x_Jacksonville_Hamburg == 0.0
-
-Vertex: StPetersburg
-x_StPetersburg_T + -x_Berlin_StPetersburg + -x_Rotterdam_StPetersburg + -x_Napoli_StPetersburg + -x_Istanbul_StPetersburg + -x_Hamburg_StPetersburg + -x_London_StPetersburg == 0.0
+x_Hamburg_Rostov + x_Hamburg_StPetersburg + x_Hamburg_Moscow + -x_Jacksonville_Hamburg + -x_Boston_Hamburg == 0.0
 
 Vertex: Istanbul
 x_Istanbul_Moscow + x_Istanbul_Rostov + x_Istanbul_StPetersburg + -x_Jacksonville_Istanbul + -x_Boston_Istanbul == 0.0
 
+Vertex: Jacksonville
+x_Jacksonville_Istanbul + x_Jacksonville_Berlin + x_Jacksonville_Rotterdam + x_Jacksonville_Hamburg + x_Jacksonville_Napoli + x_Jacksonville_London + -x_S_Jacksonville == 0.0
+
+Vertex: London
+x_London_StPetersburg + x_London_Rostov + x_London_Moscow + -x_Boston_London + -x_Jacksonville_London == 0.0
+
+Vertex: Moscow
+x_Moscow_T + -x_Napoli_Moscow + -x_Hamburg_Moscow + -x_Rotterdam_Moscow + -x_Istanbul_Moscow + -x_London_Moscow + -x_Berlin_Moscow == 0.0
+
 Vertex: Napoli
-x_Napoli_StPetersburg + x_Napoli_Rostov + x_Napoli_Moscow + -x_Boston_Napoli + -x_Jacksonville_Napoli == 0.0
+x_Napoli_Moscow + x_Napoli_Rostov + x_Napoli_StPetersburg + -x_Boston_Napoli + -x_Jacksonville_Napoli == 0.0
+
+Vertex: Rostov
+x_Rostov_T + -x_Hamburg_Rostov + -x_London_Rostov + -x_Napoli_Rostov + -x_Rotterdam_Rostov + -x_Berlin_Rostov + -x_Istanbul_Rostov == 0.0
+
+Vertex: Rotterdam
+x_Rotterdam_Moscow + x_Rotterdam_Rostov + x_Rotterdam_StPetersburg + -x_Jacksonville_Rotterdam + -x_Boston_Rotterdam == 0.0
+
+Vertex: S
+x_S_T + x_S_Jacksonville + x_S_Boston == 1000000.0
+
+Vertex: StPetersburg
+x_StPetersburg_T + -x_London_StPetersburg + -x_Hamburg_StPetersburg + -x_Berlin_StPetersburg + -x_Napoli_StPetersburg + -x_Rotterdam_StPetersburg + -x_Istanbul_StPetersburg == 0.0
+
+Vertex: T
+-x_StPetersburg_T + -x_S_T + -x_Moscow_T + -x_Rostov_T == -1000000.0
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">## Update the edge capacity constraints
 </span><span class="n">capacity_constraints</span> <span class="o">=</span> <span class="p">[]</span>
-<span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">graph</span><span class="p">.</span><span class="n">edges</span><span class="p">:</span>
+<span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">graph</span><span class="p">.</span><span class="n">edges</span><span class="p">,</span> <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">.</span><span class="n">source</span><span class="p">.</span><span class="n">name</span><span class="p">):</span>
     <span class="n">constr</span> <span class="o">=</span> <span class="nb">eval</span><span class="p">(</span><span class="s">'x_{s}_{t} &lt;= edge.capacity_tons'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span>
         <span class="n">s</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">source</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">t</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">name</span><span class="p">))</span>
     <span class="n">capacity_constraints</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">constr</span><span class="p">)</span>
     <span class="k">print</span><span class="p">(</span><span class="n">constr</span><span class="p">)</span>
 </code></pre></div></div>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>x_Jacksonville_London &lt;= 90000.0
-x_Boston_Rotterdam &lt;= inf
-x_Berlin_StPetersburg &lt;= 75000.0
-x_StPetersburg_T &lt;= inf
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>x_Berlin_StPetersburg &lt;= 75000.0
 x_Berlin_Rostov &lt;= 0.0
-x_Rotterdam_Moscow &lt;= 9600.0
-x_Boston_Napoli &lt;= inf
-x_Jacksonville_Istanbul &lt;= 105000.0
-x_Istanbul_Moscow &lt;= 15000.0
-x_S_T &lt;= inf
-x_Boston_London &lt;= 75000.0
-x_Hamburg_Moscow &lt;= 11200.0
-x_Istanbul_Rostov &lt;= 135000.0
-x_Rostov_T &lt;= inf
-x_Jacksonville_Berlin &lt;= 75000.0
+x_Berlin_Moscow &lt;= 45000.0
+x_Boston_Istanbul &lt;= 75000.0
 x_Boston_Berlin &lt;= 45000.0
-x_Rotterdam_StPetersburg &lt;= inf
+x_Boston_Napoli &lt;= inf
+x_Boston_London &lt;= 75000.0
+x_Boston_Rotterdam &lt;= inf
 x_Boston_Hamburg &lt;= inf
 x_Hamburg_Rostov &lt;= 8000.0
-x_Rotterdam_Rostov &lt;= 12000.0
-x_Napoli_StPetersburg &lt;= inf
-x_Moscow_T &lt;= inf
-x_Jacksonville_Hamburg &lt;= inf
-x_S_Boston &lt;= inf
-x_Berlin_Moscow &lt;= 45000.0
-x_Napoli_Rostov &lt;= 22400.0
-x_S_Jacksonville &lt;= inf
-x_Istanbul_StPetersburg &lt;= 0.0
-x_Jacksonville_Napoli &lt;= inf
-x_London_Moscow &lt;= 30000.0
-x_Boston_Istanbul &lt;= 75000.0
-x_Napoli_Moscow &lt;= 24000.0
 x_Hamburg_StPetersburg &lt;= inf
-x_London_StPetersburg &lt;= 150000.0
+x_Hamburg_Moscow &lt;= 11200.0
+x_Istanbul_Moscow &lt;= 15000.0
+x_Istanbul_Rostov &lt;= 135000.0
+x_Istanbul_StPetersburg &lt;= 0.0
+x_Jacksonville_Istanbul &lt;= 105000.0
+x_Jacksonville_Berlin &lt;= 75000.0
 x_Jacksonville_Rotterdam &lt;= inf
+x_Jacksonville_Hamburg &lt;= inf
+x_Jacksonville_Napoli &lt;= inf
+x_Jacksonville_London &lt;= 90000.0
+x_London_StPetersburg &lt;= 150000.0
 x_London_Rostov &lt;= 15000.0
+x_London_Moscow &lt;= 30000.0
+x_Moscow_T &lt;= inf
+x_Napoli_Moscow &lt;= 24000.0
+x_Napoli_Rostov &lt;= 22400.0
+x_Napoli_StPetersburg &lt;= inf
+x_Rostov_T &lt;= inf
+x_Rotterdam_Moscow &lt;= 9600.0
+x_Rotterdam_Rostov &lt;= 12000.0
+x_Rotterdam_StPetersburg &lt;= inf
+x_S_T &lt;= inf
+x_S_Jacksonville &lt;= inf
+x_S_Boston &lt;= inf
+x_StPetersburg_T &lt;= inf
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">prob_max_flow</span> <span class="o">=</span> <span class="n">cp</span><span class="p">.</span><span class="n">Problem</span><span class="p">(</span><span class="n">obj_max_flow</span><span class="p">,</span> <span class="n">node_flow_constraints</span> <span class="o">+</span> <span class="n">capacity_constraints</span><span class="p">)</span>
@@ -1921,37 +1936,37 @@ x_London_Rostov &lt;= 15000.0
                                      CVXPY                                     
                                      v1.3.1                                    
 ===============================================================================
-(CVXPY) Jun 05 02:22:48 PM: Your problem has 36 variables, 49 constraints, and 0 parameters.
-(CVXPY) Jun 05 02:22:48 PM: It is compliant with the following grammars: DCP, DQCP
-(CVXPY) Jun 05 02:22:48 PM: (If you need to solve this problem multiple times, but with different data, consider using parameters.)
-(CVXPY) Jun 05 02:22:48 PM: CVXPY will first compile your problem; then, it will invoke a numerical solver to obtain a solution.
+(CVXPY) Jun 07 07:08:41 PM: Your problem has 36 variables, 49 constraints, and 0 parameters.
+(CVXPY) Jun 07 07:08:41 PM: It is compliant with the following grammars: DCP, DQCP
+(CVXPY) Jun 07 07:08:41 PM: (If you need to solve this problem multiple times, but with different data, consider using parameters.)
+(CVXPY) Jun 07 07:08:41 PM: CVXPY will first compile your problem; then, it will invoke a numerical solver to obtain a solution.
 -------------------------------------------------------------------------------
                                   Compilation                                  
 -------------------------------------------------------------------------------
-(CVXPY) Jun 05 02:22:48 PM: Compiling problem (target solver=GLPK).
-(CVXPY) Jun 05 02:22:48 PM: Reduction chain: Dcp2Cone -&gt; CvxAttr2Constr -&gt; ConeMatrixStuffing -&gt; GLPK
-(CVXPY) Jun 05 02:22:48 PM: Applying reduction Dcp2Cone
-(CVXPY) Jun 05 02:22:48 PM: Applying reduction CvxAttr2Constr
-(CVXPY) Jun 05 02:22:48 PM: Applying reduction ConeMatrixStuffing
-(CVXPY) Jun 05 02:22:48 PM: Applying reduction GLPK
-(CVXPY) Jun 05 02:22:48 PM: Finished problem compilation (took 1.120e-01 seconds).
+(CVXPY) Jun 07 07:08:41 PM: Compiling problem (target solver=GLPK).
+(CVXPY) Jun 07 07:08:41 PM: Reduction chain: Dcp2Cone -&gt; CvxAttr2Constr -&gt; ConeMatrixStuffing -&gt; GLPK
+(CVXPY) Jun 07 07:08:41 PM: Applying reduction Dcp2Cone
+(CVXPY) Jun 07 07:08:41 PM: Applying reduction CvxAttr2Constr
+(CVXPY) Jun 07 07:08:41 PM: Applying reduction ConeMatrixStuffing
+(CVXPY) Jun 07 07:08:41 PM: Applying reduction GLPK
+(CVXPY) Jun 07 07:08:41 PM: Finished problem compilation (took 1.826e-01 seconds).
 -------------------------------------------------------------------------------
                                 Numerical solver                               
 -------------------------------------------------------------------------------
-(CVXPY) Jun 05 02:22:48 PM: Invoking solver GLPK  to obtain a solution.
+(CVXPY) Jun 07 07:08:41 PM: Invoking solver GLPK  to obtain a solution.
+GLPK Simplex Optimizer 5.0
+85 rows, 36 columns, 144 non-zeros
 -------------------------------------------------------------------------------
                                     Summary                                    
 -------------------------------------------------------------------------------
-(CVXPY) Jun 05 02:22:48 PM: Problem status: optimal
-GLPK Simplex Optimizer 5.0
-85 rows, 36 columns, 144 non-zeros
+(CVXPY) Jun 07 07:08:41 PM: Problem status: optimal
       0: obj =               nan inf =   2.000e+06 (2)
       1: obj =               nan inf =   0.000e+00 (0)
-*    18: obj =               nan inf =   0.000e+00 (0)
+*    27: obj =               nan inf =   0.000e+00 (0)
 OPTIMAL LP SOLUTION FOUND
-(CVXPY) Jun 05 02:22:48 PM: Optimal value: 0.000e+00
-(CVXPY) Jun 05 02:22:48 PM: Compilation took 1.120e-01 seconds
-(CVXPY) Jun 05 02:22:48 PM: Solver (including time spent in interface) took 6.440e-04 seconds
+(CVXPY) Jun 07 07:08:41 PM: Optimal value: 0.000e+00
+(CVXPY) Jun 07 07:08:41 PM: Compilation took 1.826e-01 seconds
+(CVXPY) Jun 07 07:08:41 PM: Solver (including time spent in interface) took 8.690e-04 seconds
 
 
 
@@ -1976,7 +1991,7 @@ OPTIMAL LP SOLUTION FOUND
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">df</span> <span class="o">=</span> <span class="n">prettify</span><span class="p">(</span><span class="n">summary</span><span class="p">[</span><span class="s">'optimal_solution'</span><span class="p">])</span>
-<span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">.</span><span class="n">value</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+<span class="n">df</span><span class="p">[</span><span class="n">df</span><span class="p">.</span><span class="n">value</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">].</span><span class="n">sort_values</span><span class="p">(</span><span class="n">by</span><span class="o">=</span><span class="s">'variable'</span><span class="p">)</span>
 </code></pre></div></div>
 
 <div>
@@ -2003,14 +2018,54 @@ OPTIMAL LP SOLUTION FOUND
   </thead>
   <tbody>
     <tr>
-      <th>2</th>
-      <td>x_Berlin_StPetersburg</td>
+      <th>0</th>
+      <td>x_Berlin_Moscow</td>
+      <td>45000.0</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>x_Boston_Berlin</td>
+      <td>45000.0</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>x_Boston_Hamburg</td>
+      <td>692000.0</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>x_Boston_Istanbul</td>
       <td>75000.0</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>x_Boston_London</td>
+      <td>45000.0</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>x_Boston_Napoli</td>
+      <td>46400.0</td>
     </tr>
     <tr>
       <th>8</th>
       <td>x_Boston_Rotterdam</td>
-      <td>820000.0</td>
+      <td>21600.0</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>x_Hamburg_Moscow</td>
+      <td>11200.0</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>x_Hamburg_Rostov</td>
+      <td>8000.0</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>x_Hamburg_StPetersburg</td>
+      <td>672800.0</td>
     </tr>
     <tr>
       <th>12</th>
@@ -2020,27 +2075,42 @@ OPTIMAL LP SOLUTION FOUND
     <tr>
       <th>13</th>
       <td>x_Istanbul_Rostov</td>
-      <td>90000.0</td>
-    </tr>
-    <tr>
-      <th>15</th>
-      <td>x_Jacksonville_Berlin</td>
-      <td>75000.0</td>
+      <td>135000.0</td>
     </tr>
     <tr>
       <th>17</th>
       <td>x_Jacksonville_Istanbul</td>
-      <td>105000.0</td>
+      <td>75000.0</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td>x_London_Moscow</td>
+      <td>30000.0</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td>x_London_Rostov</td>
+      <td>15000.0</td>
     </tr>
     <tr>
       <th>24</th>
       <td>x_Moscow_T</td>
-      <td>24600.0</td>
+      <td>134800.0</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td>x_Napoli_Moscow</td>
+      <td>24000.0</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td>x_Napoli_Rostov</td>
+      <td>22400.0</td>
     </tr>
     <tr>
       <th>28</th>
       <td>x_Rostov_T</td>
-      <td>90000.0</td>
+      <td>192400.0</td>
     </tr>
     <tr>
       <th>29</th>
@@ -2048,24 +2118,24 @@ OPTIMAL LP SOLUTION FOUND
       <td>9600.0</td>
     </tr>
     <tr>
-      <th>31</th>
-      <td>x_Rotterdam_StPetersburg</td>
-      <td>810400.0</td>
+      <th>30</th>
+      <td>x_Rotterdam_Rostov</td>
+      <td>12000.0</td>
     </tr>
     <tr>
       <th>32</th>
       <td>x_S_Boston</td>
-      <td>820000.0</td>
+      <td>925000.0</td>
     </tr>
     <tr>
       <th>33</th>
       <td>x_S_Jacksonville</td>
-      <td>180000.0</td>
+      <td>75000.0</td>
     </tr>
     <tr>
       <th>35</th>
       <td>x_StPetersburg_T</td>
-      <td>885400.0</td>
+      <td>672800.0</td>
     </tr>
   </tbody>
 </table>
@@ -2073,12 +2143,13 @@ OPTIMAL LP SOLUTION FOUND
 
 <p>The optimal soution is shown below</p>
 
-<p><img src="../assets/files/images/max_flow_optimal_solution.png" width="700" length="700" /></p>
+<p><img src="../assets/files/images/max_flow_optimal_solution_new.png" width="700" length="700" /></p>
 
 <p>Points to note:</p>
 <ul>
   <li>The total cargo (1 million tons) shipped from the US reaches the Russian Federation.</li>
-  <li>However, as expected, the individual requirements of the three cities from the previous scenario could not be satisfied. E.g. the total cargo reaching Rostov is 90,000 while the cargo requirement at Rostov from the previous scenario was 240,000.</li>
+  <li>However, as expected, the individual requirements of the three cities from the previous scenario could not be satisfied. E.g. the total cargo reaching Rostov is 192,400 tons while the cargo requirement at Rostov from the previous scenario was 240,000 tons.</li>
+  <li>The above optimal solution is not unique. In other words, ignoring all costs, there are other ways to send all of the cargo from US to the Russian Federation.</li>
 </ul>
 
 <p>Hence, we conclude that if the President could choose to ignore the edge costs and the individual city requirements in the interest of making sure that all the intended cargo reaches the Russian Federation, the above solution will accomplish that. However, a logical question is: <em>what would the above solution cost?</em></p>
@@ -2105,14 +2176,223 @@ OPTIMAL LP SOLUTION FOUND
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">obj_min_cost_flow</span><span class="p">.</span><span class="n">value</span>
 </code></pre></div></div>
 
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>344350000.0
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>358536666.6666666
 </code></pre></div></div>
 
-<p>As seen above, the optimal solution for the maximum cost flow problem shown above has a cost of <strong>$ 344,350,000</strong>. By contrast, the optimal solution to the minimum cost flow model is <strong>$ 412,866,667</strong>. This may seem counterintuitive because we expect that trying to minimize the total cost should give a smaller optimal value. However, the reason for the above disparity is that in the minimum cost flow problem, we were trying to satisfy the demand constraints at each of the three demand nodes - Saint Petersburg, Moscow and Rostov. However, in the maximum flow problem, we relaxed these constraints and were able to achieve an overall cheaper solution!</p>
+<p>As seen above, the optimal solution for the maximum cost flow problem shown above has a cost of <strong>$ 358,536,667</strong>. By contrast, the optimal solution to the minimum cost flow model is <strong>$ 412,866,667</strong>. This may seem counterintuitive because we expect that trying to minimize the total cost should give a smaller optimal value. However, the reason for the above disparity is that in the minimum cost flow problem, we were trying to satisfy the demand constraints at each of the three demand nodes - Saint Petersburg, Moscow and Rostov. However, in the maximum flow problem, we relaxed these constraints and were able to achieve an overall cheaper solution!</p>
+
+<h2 id="scenario-4-re-establishing-communications">Scenario 4: Re-establishing communications</h2>
+
+<h3 id="a-minimum-spanning-tree-mst-problem">A minimum spanning tree (MST) problem</h3>
+<p>Even before all American troops and supplies had reached Saint Petersburg, Moscow, and Rostov, infighting among Commander Votachev’s troops about whether to make the next attack against Saint Petersburg or against Moscow split the revolutionaries. Troops from Moscow easily overcame the vulnerable revolutionaries. Commander Votachev was imprisoned, and the next step became rebuilding the seven cities razed by his armies.</p>
+
+<p>The President’s top priority is to help the Russian government to reestablish communications between the seven Russian cities and Moscow at minimum cost. The price of installing communication lines between any two Russian cities varies given the cost of shipping wire to the area, the level of destruction in the area, and the roughness of the terrain.
+Luckily, a city is able to communicate with all others if it is connected only indirectly to every other city. Saint Petersburg and Rostov are already connected to Moscow, so if any of the seven cities is connected to Saint Petersburg or Rostov, it will also be connected to Moscow. The cost of replacing communication lines between two given cities for which this is possible is shown below.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: left">Between</th>
+      <th style="text-align: right">Cost($)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: left">Saint Petersburg and Kazan</td>
+      <td style="text-align: right">210,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Saint Petersburg and Perm</td>
+      <td style="text-align: right">185,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Saint Petersburg and Ufa</td>
+      <td style="text-align: right">225,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Moscow and Ufa</td>
+      <td style="text-align: right">310,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Moscow and Samara</td>
+      <td style="text-align: right">195,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Moscow and Orenburg</td>
+      <td style="text-align: right">440,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Moscow and Saratov</td>
+      <td style="text-align: right">140,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Rostov and Saratov</td>
+      <td style="text-align: right">200,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Rostov and Orenburg</td>
+      <td style="text-align: right">120,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Kazan and Perm</td>
+      <td style="text-align: right">150,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Kazan and Ufa</td>
+      <td style="text-align: right">105,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Kazan and Samara</td>
+      <td style="text-align: right">95,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Perm and Yekaterinburg</td>
+      <td style="text-align: right">85,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Perm and Ufa</td>
+      <td style="text-align: right">125,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Yekaterinburg and Ufa</td>
+      <td style="text-align: right">125,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Ufa and Samara</td>
+      <td style="text-align: right">100,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Ufa and Orenburg</td>
+      <td style="text-align: right">75,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Saratov and Samara</td>
+      <td style="text-align: right">100,000</td>
+    </tr>
+    <tr>
+      <td style="text-align: left">Saratov and Orenburg</td>
+      <td style="text-align: right">95,000</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The minimum spanning tree problem can be solved in multiple ways. One way is to set it up as a Binary Integer Programming problem and then use a Branch and Bound algorithm to solve it. (We will see how this formulation works later.)</p>
+
+<p>A more efficient way, especially for larger problems with sparse graphs, is to use the specialized minimum spanning tree (MST) algorithm which is more lightweight and well suited for an MST problem in the standard form (which is the case for us.) We will directly use the custom implementation of the MST algorithm from the <code class="language-plaintext highlighter-rouge">solver</code> module.</p>
+
+<h3 id="the-mst-algorithm">The MST algorithm</h3>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">edge_list</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'StPetersburg'</span><span class="p">,</span>  <span class="s">'Kazan'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">210000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'StPetersburg'</span><span class="p">,</span>  <span class="s">'Perm'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">185000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'StPetersburg'</span><span class="p">,</span>  <span class="s">'Ufa'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">225000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Moscow'</span><span class="p">,</span>  <span class="s">'Ufa'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">310000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Moscow'</span><span class="p">,</span>  <span class="s">'Samara'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">195000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Moscow'</span><span class="p">,</span>  <span class="s">'Orenburg'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">440000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Moscow'</span><span class="p">,</span>  <span class="s">'Saratov'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">140000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Rostov'</span><span class="p">,</span>  <span class="s">'Saratov'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">200000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Rostov'</span><span class="p">,</span>  <span class="s">'Orenburg'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">120000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Kazan'</span><span class="p">,</span>  <span class="s">'Perm'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">150000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Kazan'</span><span class="p">,</span>  <span class="s">'Ufa'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">105000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Kazan'</span><span class="p">,</span>  <span class="s">'Samara'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">95000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Perm'</span><span class="p">,</span>  <span class="s">'Yekaterinburg'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">85000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Perm'</span><span class="p">,</span>  <span class="s">'Ufa'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">125000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Yekaterinburg'</span><span class="p">,</span>  <span class="s">'Ufa'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">125000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Ufa'</span><span class="p">,</span>  <span class="s">'Samara'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">100000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Ufa'</span><span class="p">,</span>  <span class="s">'Orenburg'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">75000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Saratov'</span><span class="p">,</span>  <span class="s">'Samara'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">100000</span><span class="p">),</span>
+    <span class="n">Edge</span><span class="p">(</span><span class="s">'Saratov'</span><span class="p">,</span>  <span class="s">'Orenburg'</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="mi">95000</span><span class="p">),</span>
+<span class="p">]</span>
+<span class="n">graph</span> <span class="o">=</span> <span class="n">Graph</span><span class="p">(</span><span class="n">edge_list</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># make it an undirected graph
+</span><span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">edge_list</span><span class="p">:</span>
+    <span class="n">reverse_edge</span> <span class="o">=</span> <span class="n">Edge</span><span class="p">(</span>
+        <span class="n">edge</span><span class="p">.</span><span class="n">target</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">edge</span><span class="p">.</span><span class="n">source</span><span class="p">.</span><span class="n">name</span><span class="p">,</span> <span class="n">cost</span><span class="o">=</span><span class="n">edge</span><span class="p">.</span><span class="n">cost</span><span class="p">)</span>
+    <span class="n">graph</span><span class="p">.</span><span class="n">add_edge</span><span class="p">(</span><span class="n">reverse_edge</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">graph</span><span class="p">.</span><span class="n">vertices</span><span class="p">:</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Vertex: Kazan
+Vertex: Samara
+Vertex: Perm
+Vertex: StPetersburg
+Vertex: Orenburg
+Vertex: Rostov
+Vertex: Moscow
+Vertex: Saratov
+Vertex: Ufa
+Vertex: Yekaterinburg
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">solver.algorithms</span> <span class="kn">import</span> <span class="n">get_minimum_spanning_tree</span>
+
+<span class="n">tree</span> <span class="o">=</span> <span class="n">get_minimum_spanning_tree</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">key_attr</span><span class="o">=</span><span class="s">'cost'</span><span class="p">)</span>
+<span class="n">total_cost</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">edge</span><span class="p">.</span><span class="n">cost</span> <span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">tree</span><span class="p">.</span><span class="n">edges</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="n">edge</span> <span class="ow">in</span> <span class="n">tree</span><span class="p">.</span><span class="n">edges</span><span class="p">:</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">edge</span><span class="p">,</span> <span class="n">edge</span><span class="p">.</span><span class="n">cost</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Edge: Ufa-&gt;Yekaterinburg 125000
+Edge: Perm-&gt;StPetersburg 185000
+Edge: Orenburg-&gt;Ufa 75000
+Edge: Kazan-&gt;Samara 95000
+Edge: Saratov-&gt;Moscow 140000
+Edge: Yekaterinburg-&gt;Perm 85000
+Edge: Samara-&gt;Saratov 100000
+Edge: Orenburg-&gt;Rostov 120000
+Edge: Saratov-&gt;Orenburg 95000
+</code></pre></div></div>
+
+<p>The Minimum Spanning Tree is shown below:</p>
+
+<p><img src="../assets/files/images/spanning_tree_solution.png" width="600" length="600" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">total_cost</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>1020000
+</code></pre></div></div>
+
+<h3 id="the-bip-cutset-formulation-of-mst">The BIP (cutset) formulation of MST</h3>
+
+<p>Given the undirected graph, we can formulate the MST problem as a BIP. Shown below is one of multiple ways this can be done. This particular formulation is called the <em>cutset</em> formulation.</p>
+
+<p>Parameters:</p>
+
+\[c_{i, j}:= \text{ Cost associated with edge (i, j)}\]
+
+<p>Variables:</p>
+
+\[y_{i, j}:= \begin{cases}1 \text{ if edge (i, j) is chosen}\\0 \text{ otherwise}\end{cases}\]
+
+<p>Objective:</p>
+
+\[\text{Minimize }\sum_{i=1}^n \sum_{j = 1}^n c_{i,j} y_{i, j}\]
+
+<p>Constraints:</p>
+
+\[y_{i, j} = y_{j, i}\quad , \forall\ i, j\qquad \text{(Symmetry)}\]
+
+\[\sum_{i=1}^n \sum_{j=1}^n y_{i, j} = 2 (n - 1)\qquad \text{(Tree)}\]
+
+\[\sum_{(i, j)\  \in \ \delta(S)} y_{j, i} \ge 1 \quad , \forall\ S \subset V, S\ne V, S \ne \emptyset \quad \text{(Connectivity)}\]
+
+<p>where \(V\) the set of vertices of the graph, and \(\delta(S)\) is the <em>cutset</em> of S containing edges that have one end in \(S\) and the other in \(V \backslash S\).</p>
+
+<p>It is worth noting that the number of connectivity constraints equals the total number of non-empty, proper subsets \(S\) of \(V\). This number is precisely \(2^n - 2\) where \(n = \mid V \mid\). As we can see, <strong>the number of connectivity constraints grows exponentially with the number of vertices in the graph</strong>. This makes the BIP formulation of the MST practically intractable and we will not go any further with this approach.</p>
 
 <h1 id="references">References</h1>
 
-<p>Code available at URL: https://github.com/ayusbhar2/operations_research/tree/main/solver</p>
+<p>Notebook available at:</p>
+
+<p>https://github.com/ayusbhar2/optimization/blob/main/applications/network_optimization/network_optimization.ipynb</p>
 
   
 </article>
