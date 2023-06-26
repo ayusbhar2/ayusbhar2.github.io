@@ -4,10 +4,6 @@ title: "About"
 permalink: /about
 ---
 
-As a “full stack” data scientist (data » math » software), I am passionate about solving hard and ill-defined problems by applying ideas from mathematics, statistics, machine learning, operations research and software engineering to messy, real world data.
+My name is Ayush Bharadwaj. As a *full stack* data scientist (data » math » software), I am passionate about solving hard and ill-defined problems by applying ideas from mathematics, statistics, machine learning, operations research and software engineering to messy, real-world data. I am particularly interested in the theory and applications of mathematical optimization in  Energy, Logistics and Finance domains.
 
-Optimization skills: Convex/ Non-convex Optimization, Robust Optimization, Network Optimization, Linear/ Mixed-Integer/ Quadratic/ Semidefinite Programming, Metaheuristics
-
-Machine Learning skills: Supervised/ Unsupervised Learning, Anomaly Detection, Ensemble Learning, Feature Engineering, Experiment Design/ Analysis, ML System Design
-
-Whether you're looking for a professional with a firm grasp on theoretical knowledge complemented by practical experience, or simply someone who enjoys the art of articulating complex ideas precisely, feel free to reach out.
+I enjoy working on small teams trying to accomplish big things. If you are looking for a professional with broad skills and experience, and the ability to connect serious mathematics with tangible business results, feel free to reach out!
