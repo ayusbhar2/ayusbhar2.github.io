@@ -1,5 +1,5 @@
 ---
-title: "A Parametric MIP approach for the Unit Commitment Problem"
+title: "Parametric Mixed-Integer Programming for Unit Commitment in Power Systems"
 layout: post
 mathjax: true
 ---
