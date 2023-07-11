@@ -63,9 +63,135 @@
 
   <p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
 
-<p>Ensuring robustness of networks is important because neural networks are vulnerable to adversarial examples produced by small perturbations in the input. E.g. small changes in the image of a chihuahua can lead a network to <a href="https://www.freecodecamp.org/news/chihuahua-or-muffin-my-search-for-the-best-computer-vision-api-cbda4d6b425d/">classify it as a chocolate chip muffin</a>.</p>
+<p>Ensuring robustness of networks is important because neural networks are vulnerable to adversarial examples produced by small perturbations in the input. E.g. small changes in the image of a chihuahua can lead a network to <a href="https://www.freecodecamp.org/news/chihuahua-or-muffin-my-search-for-the-best-computer-vision-api-cbda4d6b425d/">classify it as a chocolate chip muffin</a>. Below, we take a simple but concrete example to illustrate how a non-robust network can be exploited.</p>
 
-<p>In the subsequent sections, we will make the notion of robustness more precise. We will then explore how we can verify the robustness of a <em>trained</em> neural network using a very popular idea from mathematical optimization, viz. <em>Linear Programming</em>.</p>
+<h1 id="fooling-a-toy-network">Fooling a toy network</h1>
+
+<p>Let’s start by finding an “adversarial example” with respect to a given training example for a toy fully connected feed forward neural network. Roughly speaking, and adversarial example is a point in the feature space that differs “very slightly” from an actual training example, but this difference is enough to cause the network to misclassify the adversarial example. (We will make these ideas precise shortly)</p>
+
+<p>We will use my personal python project <code class="language-plaintext highlighter-rouge">verifiNN</code> (currently in alpha) for this. We will discuss the mathematical details of the package later in the post. For now, we will only use the package for illustration.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">!</span><span class="n">pip</span> <span class="n">install</span> <span class="n">verifiNN</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="n">pd</span>
+
+<span class="kn">from</span> <span class="nn">sklearn.datasets</span> <span class="kn">import</span> <span class="n">load_digits</span>
+
+<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
+</code></pre></div></div>
+
+<p>We will use the popular MNIST dataset of hand-written digits for our example. Each image in this dataset is an 8 X 8 image flattened to a vector of length 64.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">mnist</span> <span class="o">=</span> <span class="n">load_digits</span><span class="p">()</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">mnist</span><span class="p">.</span><span class="n">data</span><span class="p">),</span> <span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">mnist</span><span class="p">.</span><span class="n">target</span><span class="p">)</span> 
+</code></pre></div></div>
+
+<p>Next we need a classifier neural network which we will try to fool. Ideally, this would be a network that was trained on the above dataset. However, to keep things simple, we will use a toy network with random weights and biases instead.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Generate a random neural net
+</span><span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
+
+<span class="n">W1</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
+<span class="n">b1</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">64</span><span class="p">)</span>
+<span class="n">W2</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
+<span class="n">b2</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+
+<span class="n">weights</span> <span class="o">=</span> <span class="p">[</span><span class="n">W1</span><span class="p">,</span> <span class="n">W2</span><span class="p">];</span> <span class="n">biases</span> <span class="o">=</span> <span class="p">[</span><span class="n">b1</span><span class="p">,</span> <span class="n">b2</span><span class="p">]</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">verifiNN.models.network</span> <span class="kn">import</span> <span class="n">Network</span>
+<span class="kn">from</span> <span class="nn">verifiNN.verifier</span> <span class="kn">import</span> <span class="n">LPVerifier</span>
+
+<span class="n">network</span> <span class="o">=</span> <span class="n">Network</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">biases</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s">'ReLU'</span><span class="p">,</span> <span class="n">labeler</span><span class="o">=</span><span class="s">'argmax'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Now that we have a network, we want to select a reference example (from the training set) around which we will search for an adversarial example. We will also need to specify a search radius.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># select a reference input
+</span><span class="n">x_0</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">X_train</span><span class="p">.</span><span class="n">loc</span><span class="p">[</span><span class="mi">9</span><span class="p">])</span>  <span class="c1"># select the example at row index 9
+</span>
+<span class="c1"># search radius
+</span><span class="n">epsilon</span> <span class="o">=</span> <span class="mi">5</span>
+</code></pre></div></div>
+
+<p>Below are the entries of our reference example followed by the corresponding image</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">x_0</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([ 0.,  0., 11., 12.,  0.,  0.,  0.,  0.,  0.,  2., 16., 16., 16.,
+       13.,  0.,  0.,  0.,  3., 16., 12., 10., 14.,  0.,  0.,  0.,  1.,
+       16.,  1., 12., 15.,  0.,  0.,  0.,  0., 13., 16.,  9., 15.,  2.,
+        0.,  0.,  0.,  0.,  3.,  0.,  9., 11.,  0.,  0.,  0.,  0.,  0.,
+        9., 15.,  4.,  0.,  0.,  0.,  9., 12., 13.,  3.,  0.,  0.])
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">plt</span><span class="p">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x_0</span><span class="p">,</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s">'C'</span><span class="p">),</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'gray'</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="n">show</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p><img src="../assets/files/images/verifiNN_demo_14_0.png" alt="png" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">network</span><span class="p">.</span><span class="n">classify</span><span class="p">(</span><span class="n">x_0</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>9
+</code></pre></div></div>
+
+<p>Clearly, the above image is that of the digit <code class="language-plaintext highlighter-rouge">9</code> and our network has correctly classified it. Now we will try to fool the network by finding an adversarial example.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">lpvf</span> <span class="o">=</span> <span class="n">LPVerifier</span><span class="p">()</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">lpvf</span><span class="p">.</span><span class="n">compute_pointwise_robustness</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">x_0</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">x_0_tilde</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s">'adversarial_example'</span><span class="p">]</span>
+<span class="n">x_0_tilde</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([-4.7920852 , -4.79208515,  6.20791488,  7.20791487, -4.79208522,
+       -4.7920852 , -4.79208489, -4.79208523, -4.7920851 , -2.7920851 ,
+       11.20791484, 11.20791476, 11.20791512,  8.20791481, -4.7920852 ,
+       -4.7920852 , -4.79208524,  7.79208396, 11.20791481,  7.20791497,
+        5.20791511, 18.79208499, -4.79208522,  4.79208101, -4.79208524,
+       -3.79208507, 11.20791491, -3.79208524,  7.20791478, 10.20791479,
+       -4.79208514, -4.79208524, -4.79208521, -4.7920852 ,  8.20791491,
+       11.20791479,  4.20791478, 10.20791481, -2.79208521, -4.79208522,
+       -4.79208523, -4.79208524, -4.79208517, -1.79208524, -4.79208515,
+       13.79208457,  6.20791476,  4.72495082, -4.79208523, -4.7920852 ,
+       -4.79208521, -4.79208521,  4.20791477, 10.20791478, -0.79208514,
+       -4.79207914, -4.79208505, -4.79208409,  6.51396684,  7.20791475,
+        8.20791476, -1.7920852 , -4.7920852 , -4.79208521])
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">plt</span><span class="p">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x_0_tilde</span><span class="p">,</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s">'C'</span><span class="p">),</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'gray'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;matplotlib.image.AxesImage at 0x7f8cc7b5cd90&gt;
+</code></pre></div></div>
+
+<p><img src="../assets/files/images/verifiNN_demo_19_1.png" alt="png" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">network</span><span class="p">.</span><span class="n">classify</span><span class="p">(</span><span class="n">x_0_tilde</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0
+</code></pre></div></div>
+
+<p>To a human observer, it is (hopefully) clear that the above image is a <code class="language-plaintext highlighter-rouge">9</code> and not a <code class="language-plaintext highlighter-rouge">0</code>. <strong>To the network, however, this looks like a <code class="language-plaintext highlighter-rouge">0</code></strong>. Thus, we have located an adversarial example <code class="language-plaintext highlighter-rouge">x_0_tilde</code> that differs “very slightly” from the reference example <code class="language-plaintext highlighter-rouge">x_0</code>, but the slight difference is enough for the network to misclassify it (as a <code class="language-plaintext highlighter-rouge">0</code>).</p>
+
+<p>Now, some obvious call outs:</p>
+<ul>
+  <li>Our network was a very small, random network. Fooling such a network is relatively easy.</li>
+  <li>The “slight difference” between <code class="language-plaintext highlighter-rouge">x_0</code> and <code class="language-plaintext highlighter-rouge">x_0_tilde</code> is not so slight. In fact <code class="language-plaintext highlighter-rouge">x_0_tilde</code> is at a distance of approx. 4.792 from <code class="language-plaintext highlighter-rouge">x_0</code>.</li>
+  <li>Radius of search \(\epsilon = 5\) is pretty large. The closer the adversarial example is to an actual training example, the harder it will be to detect by sight.</li>
+</ul>
+
+<p>Despite the above shortcomings, the above example serves the purpose of providing concrete intuition about why robustness of neural networks is important. In the subsequent sections, we will make the notion of robustness more precise. We will then explore how we can verify the robustness of a <em>trained</em> neural network using a very popular idea from mathematical optimization, viz. <em>Linear Programming</em>.</p>
 
 <h1 id="problem-setup">Problem setup</h1>
 
