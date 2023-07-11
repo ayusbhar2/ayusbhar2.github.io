@@ -7,9 +7,186 @@ mathjax: true
 *Robustness* is a desirable property in a neural network. Informally, robustness can be described as 'resilience to perturbations in the input'. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network. 
 
 
-Ensuring robustness of networks is important because neural networks are vulnerable to adversarial examples produced by small perturbations in the input. E.g. small changes in the image of a chihuahua can lead a network to [classify it as a chocolate chip muffin](https://www.freecodecamp.org/news/chihuahua-or-muffin-my-search-for-the-best-computer-vision-api-cbda4d6b425d/).
+Ensuring robustness of networks is important because neural networks are vulnerable to adversarial examples produced by small perturbations in the input. E.g. small changes in the image of a chihuahua can lead a network to [classify it as a chocolate chip muffin](https://www.freecodecamp.org/news/chihuahua-or-muffin-my-search-for-the-best-computer-vision-api-cbda4d6b425d/). Below, we take a simple but concrete example to illustrate how a non-robust network can be exploited. 
 
-In the subsequent sections, we will make the notion of robustness more precise. We will then explore how we can verify the robustness of a *trained* neural network using a very popular idea from mathematical optimization, viz. *Linear Programming*.
+# Fooling a toy network
+
+Let's start by finding an "adversarial example" with respect to a given training example for a toy fully connected feed forward neural network. Roughly speaking, and adversarial example is a point in the feature space that differs "very slightly" from an actual training example, but this difference is enough to cause the network to misclassify the adversarial example. (We will make these ideas precise shortly)
+
+We will use my personal python project `verifiNN` (currently in alpha) for this. We will discuss the mathematical details of the package later in the post. For now, we will only use the package for illustration.
+
+
+```python
+!pip install verifiNN
+```
+
+
+```python
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+from sklearn.datasets import load_digits
+
+%matplotlib inline
+```
+
+We will use the popular MNIST dataset of hand-written digits for our example. Each image in this dataset is an 8 X 8 image flattened to a vector of length 64.
+
+
+```python
+mnist = load_digits()
+```
+
+
+```python
+X_train, Y_train = pd.DataFrame(mnist.data), pd.DataFrame(mnist.target) 
+```
+
+Next we need a classifier neural network which we will try to fool. Ideally, this would be a network that was trained on the above dataset. However, to keep things simple, we will use a toy network with random weights and biases instead.
+
+
+```python
+# Generate a random neural net
+np.random.seed(6)
+
+W1 = np.random.rand(64, 64)
+b1 = np.random.rand(64)
+W2 = np.random.rand(10, 64)
+b2 = np.random.rand(10)
+
+weights = [W1, W2]; biases = [b1, b2]
+```
+
+
+```python
+from verifiNN.models.network import Network
+from verifiNN.verifier import LPVerifier
+
+network = Network(weights, biases, activation='ReLU', labeler='argmax')
+```
+
+Now that we have a network, we want to select a reference example (from the training set) around which we will search for an adversarial example. We will also need to specify a search radius.
+
+
+```python
+# select a reference input
+x_0 = np.array(X_train.loc[9])  # select the example at row index 9
+
+# search radius
+epsilon = 5
+```
+
+Below are the entries of our reference example followed by the corresponding image
+
+
+```python
+x_0
+```
+
+    array([ 0.,  0., 11., 12.,  0.,  0.,  0.,  0.,  0.,  2., 16., 16., 16.,
+           13.,  0.,  0.,  0.,  3., 16., 12., 10., 14.,  0.,  0.,  0.,  1.,
+           16.,  1., 12., 15.,  0.,  0.,  0.,  0., 13., 16.,  9., 15.,  2.,
+            0.,  0.,  0.,  0.,  3.,  0.,  9., 11.,  0.,  0.,  0.,  0.,  0.,
+            9., 15.,  4.,  0.,  0.,  0.,  9., 12., 13.,  3.,  0.,  0.])
+
+
+
+
+```python
+plt.imshow(np.reshape(x_0, (8, 8), order='C'), cmap='gray')
+plt.show()
+```
+
+
+    
+![png](../assets/files/images/verifiNN_demo_14_0.png)
+    
+
+
+
+```python
+network.classify(x_0)
+```
+
+
+
+
+    9
+
+
+
+Clearly, the above image is that of the digit `9` and our network has correctly classified it. Now we will try to fool the network by finding an adversarial example.
+
+
+```python
+lpvf = LPVerifier()
+result = lpvf.compute_pointwise_robustness(network, x_0, epsilon)
+```
+
+
+```python
+x_0_tilde = result['adversarial_example']
+x_0_tilde
+```
+
+
+
+
+    array([-4.7920852 , -4.79208515,  6.20791488,  7.20791487, -4.79208522,
+           -4.7920852 , -4.79208489, -4.79208523, -4.7920851 , -2.7920851 ,
+           11.20791484, 11.20791476, 11.20791512,  8.20791481, -4.7920852 ,
+           -4.7920852 , -4.79208524,  7.79208396, 11.20791481,  7.20791497,
+            5.20791511, 18.79208499, -4.79208522,  4.79208101, -4.79208524,
+           -3.79208507, 11.20791491, -3.79208524,  7.20791478, 10.20791479,
+           -4.79208514, -4.79208524, -4.79208521, -4.7920852 ,  8.20791491,
+           11.20791479,  4.20791478, 10.20791481, -2.79208521, -4.79208522,
+           -4.79208523, -4.79208524, -4.79208517, -1.79208524, -4.79208515,
+           13.79208457,  6.20791476,  4.72495082, -4.79208523, -4.7920852 ,
+           -4.79208521, -4.79208521,  4.20791477, 10.20791478, -0.79208514,
+           -4.79207914, -4.79208505, -4.79208409,  6.51396684,  7.20791475,
+            8.20791476, -1.7920852 , -4.7920852 , -4.79208521])
+
+
+
+
+```python
+plt.imshow(np.reshape(x_0_tilde, (8, 8), order='C'), cmap='gray')
+```
+
+
+
+
+    <matplotlib.image.AxesImage at 0x7f8cc7b5cd90>
+
+
+
+
+    
+![png](../assets/files/images/verifiNN_demo_19_1.png)
+    
+
+
+
+```python
+network.classify(x_0_tilde)
+```
+
+
+
+
+    0
+
+
+
+To a human observer, it is (hopefully) clear that the above image is a `9` and not a `0`. **To the network, however, this looks like a `0`**. Thus, we have located an adversarial example `x_0_tilde` that differs "very slightly" from the reference example `x_0`, but the slight difference is enough for the network to misclassify it (as a `0`).
+
+Now, some obvious call outs:
+- Our network was a very small, random network. Fooling such a network is relatively easy.
+- The "slight difference" between `x_0` and `x_0_tilde` is not so slight. In fact `x_0_tilde` is at a distance of approx. 4.792 from `x_0`.
+- Radius of search $$\epsilon = 5$$ is pretty large. The closer the adversarial example is to an actual training example, the harder it will be to detect by sight.
+
+Despite the above shortcomings, the above example serves the purpose of providing concrete intuition about why robustness of neural networks is important. In the subsequent sections, we will make the notion of robustness more precise. We will then explore how we can verify the robustness of a *trained* neural network using a very popular idea from mathematical optimization, viz. *Linear Programming*.
 
 # Problem setup
 
