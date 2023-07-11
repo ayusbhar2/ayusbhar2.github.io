@@ -13,7 +13,7 @@ Ensuring robustness of networks is important because neural networks are vulnera
 
 Let's start by finding an "adversarial example" with respect to a given training example for a toy fully connected feed forward neural network. Roughly speaking, and adversarial example is a point in the feature space that differs "very slightly" from an actual training example, but this difference is enough to cause the network to misclassify the adversarial example. (We will make these ideas precise shortly)
 
-We will use my personal python project `verifiNN` (currently in alpha) for this. We will discuss the mathematical details of the package later in the post. For now, we will only use the package for illustration.
+We will use my personal project [verifiNN](https://pypi.org/project/verifiNN/) (currently in alpha) for this. We will discuss the mathematical details of the package later in the post. For now, we will only use the package for illustration.
 
 
 ```python
@@ -513,7 +513,7 @@ where (Conv) must be solved $$K -1$$ times with varying $$l'$$. Note that (Conv)
 # Conclusion
 In this post we defined the notion of robustness of a neural network and formulated the verificaion of robustness as an optimization problem. We then proposed a convex, LP approximation of this problem which can be solved easily with any linear programming solver. 
 
-It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies *non-robustness*. However, infeasibility of (Conv) does *not* certify *robustness*. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example. (For an illustration of using the above approach to verify neural network robustness, check out the alpha version of my project [verifiNN](https://pypi.org/project/verifiNN/).)
+It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies *non-robustness*. However, infeasibility of (Conv) does *not* certify *robustness*. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example.
 
 # References
 
