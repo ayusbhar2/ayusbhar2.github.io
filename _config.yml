@@ -23,7 +23,7 @@ navigation:                # accepts {file, title, url, icon, sidebaricon}
   - title: Projects
     url: /projects
   - title: Resume
-    url: /assets/files/ayush_resume_v12_ML.pdf
+    url: /assets/files/ayush_resume_v12b_ML.pdf
 
 external:                  # shows a footer with social links - for available icons see fontawesome.com/icons
   - {title: Mail, icon: envelope, url: "mailto:ayush.bharadwaj@gmail.com"}
