@@ -1,4 +1,931 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2023-08-02T10:58:13-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Algebra, Geometry and Applications of Optimization</title><subtitle>Algebra, Geometry and Applications of Optimization</subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Parametric Mixed-Integer Programming for Unit Commitment in Power Systems</title><link href="http://localhost:4000/unit-commitment-problem/" rel="alternate" type="text/html" title="Parametric Mixed-Integer Programming for Unit Commitment in Power Systems" /><published>2023-06-05T00:00:00-07:00</published><updated>2023-06-05T00:00:00-07:00</updated><id>http://localhost:4000/unit-commitment-problem</id><content type="html" xml:base="http://localhost:4000/unit-commitment-problem/"><![CDATA[<p>The Unit Commitment Problem (UCP) <a href="#References">[1]</a> in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minimize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.</p>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2025-07-31T13:01:09-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Mathematics of Machine Learning and Optimization</title><subtitle>Mathematics of Machine Learning and Optimization</subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Hessian analysis with JAX: a platform-agnostic approach</title><link href="http://localhost:4000/hessian-analysis-with-jax/" rel="alternate" type="text/html" title="Hessian analysis with JAX: a platform-agnostic approach" /><published>2025-07-31T00:00:00-07:00</published><updated>2025-07-31T00:00:00-07:00</updated><id>http://localhost:4000/hessian-analysis-with-jax</id><content type="html" xml:base="http://localhost:4000/hessian-analysis-with-jax/"><![CDATA[<p>In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.</p>
+
+<p>The goal of this post is to present a simple, <a href="https://docs.jax.dev/en/latest/index.html">JAX</a>-based framework to address the above difficulty. This framework will help us:</p>
+
+<ol>
+  <li>make the core numerical code platform-independent, allowing it to be optimized separately and used across models/platforms.</li>
+  <li>formalize the changes needed to peripheral code when switching platforms, minimizing the possibility of errors.</li>
+  <li>disentangle model training from Hessian analysis, facilitating the analysis of pre-trained models.</li>
+</ol>
+
+<p>(In my current SPAR project, we have used the above framework quite successfully.)</p>
+
+<p>NOTE: For analyzing a model, it is not necessary to train it ourselves as long as we have access to certain defining attributes of the model (details in post).</p>
+
+<p>NOTE: There are several reasons for choosing JAX for this task - performance, flexibility, math-like flavor, numpy-like interface, and the powerful <a href="https://docs.jax.dev/en/latest/pytrees.html">Pytree</a> abstraction for parameter handling (more on each of these in a future post).</p>
+
+<p>NOTE: Even if you don’t anticipate working across multiple platforms, you may still want to consider this framework for the above reasons.</p>
+
+<p>NOTE: This post assumes the reader is familiar with <code class="language-plaintext highlighter-rouge">scipy.sparse.linalg.eigsh</code> and how it can be used to compute the Hessian eigenspectrum via Hessian-vector products. (As a refresher, I recommend reading this <a href="https://www.lesswrong.com/posts/mwBaS2qE9RNNfqYBC/recipe-hessian-eigenvector-computation-for-pytorch-models">post</a> upto, but excluding, the implementation which is very Pytorch specific.)</p>
+
+<p>NOTE: The code presented here is written for simplicity and clarity, not for compute or memory efficiency. I will try to point out obvious optimizations where possible.</p>
+
+<p>NOTE: The code presented here runs on a single CPU/GPU/TPU. While JAX provides excellent primitives for distributed computations, these are out of scope for this post.</p>
+
+<h1 id="a-two-part-framework">A two-part framework</h1>
+
+<p>The proposed framework has two parts:</p>
+
+<ul>
+  <li>a <strong>core module</strong> that contains the numerical code to compute the hessian eigenspectrum</li>
+  <li>a set of <strong>mediating objects</strong> that implement a standard interface for the core module (to interact with different platforms).</li>
+</ul>
+
+<p>In essence, the mediating objects are a platform-independent representations of the four defining attributes of a model:</p>
+
+<ol>
+  <li>model parameters</li>
+  <li>training data</li>
+  <li>output function</li>
+  <li>loss function</li>
+</ol>
+
+<p>For each new model we want to analyze, we first generate the mediating objects and then pass them on to the (platform-agnostic) core module for eigenspectrum computation.</p>
+
+<p>A key observation behind this framework is that numerical code (e.g. computing the eigenspectum) requires careful memory / compute optimizations and precision handling. As a result, such code should be independent of, and shared across all models/platforms. In particular, this code should not require changes when switching models/platforms. And, while some code changes are inevitable, these changes should be few and limited to parts that are easier to implement and test.</p>
+
+<h1 id="a-pytorch-example">A Pytorch Example</h1>
+
+<p>Let’s start by looking at a concrete example. Suppose we want to compute the eigenspectrum of a toy Pytorch MLP model. For this example, we will train the model ourselves.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="n">nn</span>
+<span class="kn">import</span> <span class="nn">torch.optim</span> <span class="k">as</span> <span class="n">optim</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="c1"># Dataset
+</span><span class="n">X_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">]])</span>   <span class="c1"># shape (2, 2)
+</span><span class="n">Y_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">5.</span><span class="p">,</span> <span class="mf">6.</span><span class="p">])</span>              <span class="c1"># shape (2,)
+</span>
+<span class="c1"># Convert to PyTorch tensors
+</span><span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">X_np</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>            <span class="c1"># (2, 2)
+</span><span class="n">Y</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">Y_np</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">).</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (2, 1)
+</span>
+<span class="c1"># Define MLP with identity activations
+</span><span class="k">class</span> <span class="nc">IdentityMLP</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">fc1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>  <span class="c1"># Hidden: 2x2
+</span>        <span class="bp">self</span><span class="p">.</span><span class="n">fc2</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>  <span class="c1"># Output: 2x1
+</span>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fc1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Identity activation (no-op)
+</span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Identity activation (no-op)
+</span>        <span class="k">return</span> <span class="n">x</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Initialize model, loss, and optimizer
+</span><span class="n">torch</span><span class="p">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">IdentityMLP</span><span class="p">()</span>
+<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">MSELoss</span><span class="p">()</span>
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="p">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Training loop (2 epochs, full batch)
+</span><span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+    <span class="n">optimizer</span><span class="p">.</span><span class="n">zero_grad</span><span class="p">()</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>       <span class="c1"># Forward pass
+</span>    <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>  <span class="c1"># Compute loss
+</span>    <span class="n">loss</span><span class="p">.</span><span class="n">backward</span><span class="p">()</span>         <span class="c1"># Backpropagation
+</span>    <span class="n">optimizer</span><span class="p">.</span><span class="n">step</span><span class="p">()</span>        <span class="c1"># Gradient update
+</span>    <span class="k">print</span><span class="p">(</span><span class="sa">f</span><span class="s">"Epoch </span><span class="si">{</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s">, Loss: </span><span class="si">{</span><span class="n">loss</span><span class="p">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="p">.</span><span class="mi">4</span><span class="n">f</span><span class="si">}</span><span class="s">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Epoch 1, Loss: 50.2097
+Epoch 2, Loss: 31.4481
+Epoch 3, Loss: 26.3921
+Epoch 4, Loss: 22.0585
+Epoch 5, Loss: 16.8630
+Epoch 6, Loss: 10.8475
+Epoch 7, Loss: 5.5302
+Epoch 8, Loss: 2.6469
+Epoch 9, Loss: 1.8508
+Epoch 10, Loss: 1.7286
+</code></pre></div></div>
+
+<p>Since we have access to the model’s parameters, the training data, the output function and the loss function, we are ready to generate the mediating objects.</p>
+
+<h2 id="generating-mediating-objects">Generating mediating objects</h2>
+
+<h3 id="1-model-parameters-as-a-python-iterable">1. Model parameters (as a python iterable)</h3>
+
+<p>The first mediating object is a python iterable containing model parameters as pure-python scalars and/or numpy arrays. The idea is to represent model parameters in a way that is platform-independent and recognized by JAX, making parameter handling extremely easy. This iterable can have any structure with arbitrary levels of nested dicts, lists and tuples (technically, it just needs to be a valid JAX <a href="https://docs.jax.dev/en/latest/pytrees.html">Pytree</a>).</p>
+
+<p>The above iterable can be generated from an in-memory model or from an on-file json object. Either way, this can be done easily in just a few lines of (highly reusable) code. We do this below for our Pytorch model.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 1. Model params
+</span>
+<span class="k">def</span> <span class="nf">extract_pytorch_model_parameters</span><span class="p">(</span><span class="n">pytorch_model</span><span class="p">):</span>
+    <span class="n">param_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">pytorch_model</span><span class="p">.</span><span class="n">named_parameters</span><span class="p">():</span>
+        <span class="c1"># Detach, convert to list, round to 7 decimal places
+</span>        <span class="n">rounded</span> <span class="o">=</span> <span class="n">param</span><span class="p">.</span><span class="n">detach</span><span class="p">().</span><span class="n">cpu</span><span class="p">().</span><span class="n">numpy</span><span class="p">().</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="n">rounded</span> <span class="o">=</span> <span class="p">[[</span><span class="nb">round</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="nb">round</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
+                   <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rounded</span><span class="p">]</span>
+        <span class="n">param_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">rounded</span>
+    <span class="k">return</span> <span class="n">param_dict</span>
+
+<span class="n">params</span> <span class="o">=</span> <span class="n">extract_pytorch_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+<span class="k">print</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>{'fc1.weight': [[0.3645523, 0.9664639], [-0.5033512, -0.4280049]], 'fc1.bias': [-0.0550507, 0.2033689], 'fc2.weight': [[0.9411813, -0.4964321]], 'fc2.bias': [0.6310059]}
+</code></pre></div></div>
+
+<h3 id="2-training-set-as-jax-arrays">2. Training set (as jax arrays)</h3>
+
+<p>The second mediating object is the model’s training set in the form of jax arrays. Since different platforms offer different APIs for accessing datasets, this may require writing a function to generate JAX arrays from something like a Pytorch dataloader object (see <a href="https://docs.jax.dev/en/latest/notebooks/Neural_Network_and_Data_Loading.html#data-loading-with-pytorch">here</a> for an example). Again, this can be done in a few lines of (highly reusable) code. We do this below for our example model.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 2. Training data
+</span>
+<span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="n">jnp</span>
+
+<span class="k">def</span> <span class="nf">cast_pytorch_tensors_to_jax_arrays</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">):</span>
+    <span class="c1"># Convert Pytroch tensors to jax arrays
+</span>    <span class="n">X_jnp</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">X</span><span class="p">.</span><span class="n">cpu</span><span class="p">().</span><span class="n">detach</span><span class="p">().</span><span class="n">numpy</span><span class="p">())</span>
+    <span class="n">Y_jnp</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">Y</span><span class="p">.</span><span class="n">cpu</span><span class="p">().</span><span class="n">detach</span><span class="p">().</span><span class="n">numpy</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span>
+
+<span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span> <span class="o">=</span> <span class="n">cast_pytorch_tensors_to_jax_arrays</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+
+<span class="c1"># print(type(X_jnp))
+# print(type(Y_jnp))
+</span></code></pre></div></div>
+
+<h3 id="3-ouput-function-as-a-python-object">3. Ouput function (as a python object)</h3>
+
+<p>The third mediating object is a JAX version of the source model’s output function (which we need to write ourselves). This new function must accept the first two mediating objects (i.e. the model parameters and the training set) as inputs, and produce the same outputs as the original model. We will call this function <code class="language-plaintext highlighter-rouge">forward_copy_torch</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 3. Output function
+</span><span class="k">def</span> <span class="nf">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+    <span class="n">w1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc1.weight'</span><span class="p">])</span>
+    <span class="n">b1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc1.bias'</span><span class="p">])</span>
+    <span class="n">w2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc2.weight'</span><span class="p">])</span>
+    <span class="n">b2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc2.bias'</span><span class="p">])</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">b1</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
+    <span class="k">return</span> <span class="n">x</span> 
+
+<span class="c1"># Test that our output matches original model
+</span><span class="k">print</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)))</span>
+<span class="k">print</span><span class="p">(</span><span class="n">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">])))</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tensor([3.3154], grad_fn=&lt;ViewBackward0&gt;)
+[3.3154101]
+</code></pre></div></div>
+
+<p><strong>NOTE</strong>: The <code class="language-plaintext highlighter-rouge">forward_copy_torch</code> method takes as input a single training example and not a “batch” of training examples (since the idea of a batch is not relevant from a Hessian analysis perspective).</p>
+
+<p><strong>TIP</strong>: It is a good idea to verify the new function’s output against the original model’s output as a sanity check. If the outputs differ, our analysis will be meaningless.</p>
+
+<h3 id="4-loss-function-as-a-python-object">4. Loss function (as a python object)</h3>
+
+<p>The fourth and final mediating object is a JAX version of the source model’s loss function. Once again, we need to write this function ourselves. This new function must accept the first three mediating objects (i.e. parameters, training data, and output function) as inputs and produce the same training loss as the original model. But we have to be a bit more careful here.</p>
+
+<p>As we will see in the next section, the core module uses the <code class="language-plaintext highlighter-rouge">jax.jvp()</code> transformation along with the <code class="language-plaintext highlighter-rouge">eigsh</code> function to compute the Hessian eigenspectrum. In short, <code class="language-plaintext highlighter-rouge">jax.jvp()</code> facilitates the computation of Hessian-vector products via automatic differentiation, and <code class="language-plaintext highlighter-rouge">eigsh</code> utilizes these Hessian-vector products to compute the eigenspecturm. A close examination of the above two APIs will reveal two important facts:</p>
+
+<ul>
+  <li>For automatic differentiation to work, our loss function must be explicitly defined as a function of the parameters (i.e. we cannot use something generic like <code class="language-plaintext highlighter-rouge">torch.nn.MSE_loss()</code> which only takes outputs and targets as its  arguments).</li>
+  <li>For <code class="language-plaintext highlighter-rouge">eigsh</code> to work, our loss function must specifically accept a 1D array of parameters as its argument (and not an iterable or array of some other shape).</li>
+</ul>
+
+<p>We achieve the above conditions by using a function generator as shown below.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span> <span class="nn">jax.flatten_util</span> <span class="kn">import</span> <span class="n">ravel_pytree</span>
+
+<span class="k">def</span> <span class="nf">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">forward_copy</span><span class="p">):</span>
+    <span class="s">"""Returns a loss function object which accepts a 1D parameter array.
+
+    Args:
+    
+    """</span>
+
+    <span class="n">params_flat</span><span class="p">,</span> <span class="n">unravel_func</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+    
+    <span class="k">def</span> <span class="nf">_MSE_loss</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">params_flat</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">unravel_func</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+            <span class="n">s</span> <span class="o">+=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">linalg</span><span class="p">.</span><span class="n">norm</span><span class="p">(</span><span class="n">forward_copy</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">-</span> <span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="k">return</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">m</span><span class="p">)</span> <span class="o">*</span> <span class="n">s</span>
+    <span class="k">return</span> <span class="n">partial</span><span class="p">(</span><span class="n">_MSE_loss</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Things to note:</p>
+
+<ul>
+  <li>
+    <p><strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.flatten_util.ravel_pytree.html#jax.flatten_util.ravel_pytree"><code class="language-plaintext highlighter-rouge">ravel_pytree</code></a></strong> implements out-of-the-box, deterministic flattening and unflatteining of arbitrary iterables. (A powerful tool that, incidentally, doesn’t have a counterpart in Pytorch). This is just one of many functionalities provided by JAX’s <a href="https://docs.jax.dev/en/latest/pytrees.html">Pytree</a> API which makes parameter handling in JAX truly generalizable across model types, architectures and specification formats.</p>
+  </li>
+  <li>
+    <p>We only need to write the <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code> function once. We can simply reuse it for analyzing any model that was trained using MSE loss.</p>
+  </li>
+</ul>
+
+<p><strong>TIP:</strong> The <code class="language-plaintext highlighter-rouge">_MSE_loss</code> function shown here uses a <code class="language-plaintext highlighter-rouge">for</code> loop for simplicity. A more effient alternative would be to pass a vectorized version of <code class="language-plaintext highlighter-rouge">forward_copy</code> to <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code> instead. This can be done using JAX’s <strong><a href="https://docs.jax.dev/en/latest/automatic-vectorization.html"><code class="language-plaintext highlighter-rouge">vmap()</code></a></strong> transformation.</p>
+
+<p><strong>CAUTION:</strong> <code class="language-plaintext highlighter-rouge">partial(_MSE_loss, X, Y)</code> bakes the training set (i.e. X, Y) into the function object returned by <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code>. This makes the signature of the resulting function much cleaner. But doing this may increase the memory footprint due to dataset replication. However, if you are not running out of memory, then you probably don’t need to worry about this.</p>
+
+<p>Next, we generate our fourth mediating object and call it <code class="language-plaintext highlighter-rouge">MSE_loss_copy</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 4. Loss function
+</span><span class="n">MSE_loss_copy</span> <span class="o">=</span> <span class="n">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span><span class="p">,</span> <span class="n">forward_copy_torch</span><span class="p">)</span>
+
+
+<span class="c1"># Test that our loss matches the original model's loss
+</span><span class="n">params_flat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">MSE_loss_copy</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">criterion</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">Y</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tensor(1.6969, grad_fn=&lt;MseLossBackward0&gt;)
+1.6968625
+</code></pre></div></div>
+
+<h2 id="a-core-module-review">A core module review</h2>
+
+<p>Once we have generated our mediating objects, we need to pass them to the core module for eigenspectrum computation. But before we do that, let’s take a look at what the core module contains.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">#! core.py
+</span><span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="n">jnp</span>
+
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">grad</span><span class="p">,</span> <span class="n">jit</span><span class="p">,</span> <span class="n">jvp</span>
+<span class="kn">from</span> <span class="nn">jax.flatten_util</span> <span class="kn">import</span> <span class="n">ravel_pytree</span>
+<span class="kn">from</span> <span class="nn">scipy.sparse.linalg</span> <span class="kn">import</span> <span class="n">eigsh</span><span class="p">,</span> <span class="n">LinearOperator</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span>
+
+
+<span class="o">@</span><span class="n">dataclass</span>
+<span class="k">class</span> <span class="nc">EigshArgs</span><span class="p">:</span>
+    <span class="s">"""Helper class for managing the arguments to be passed to eigsh."""</span>
+    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">sigma</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">which</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s">'LM'</span>
+    <span class="n">v0</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">jnp</span><span class="p">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">tol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.001</span>
+    <span class="n">return_eigenvectors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="bp">True</span>
+
+
+<span class="k">class</span> <span class="nc">HessianAnalyzer</span><span class="p">:</span>
+    <span class="s">"""."""</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">forward</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">):</span>
+        <span class="s">"""."""</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">unravel_func</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">X_train</span> <span class="o">=</span> <span class="n">X_train</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">Y_train</span> <span class="o">=</span> <span class="n">Y_train</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">forward</span> <span class="o">=</span> <span class="n">forward</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">loss</span> <span class="o">=</span> <span class="n">loss</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span>
+        
+    <span class="k">def</span> <span class="nf">_matvec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="c1"># Given a vector v, returns the hessian-vector product Hv.
+</span>        <span class="k">return</span> <span class="n">jvp</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">loss</span><span class="p">),</span> <span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">],</span> <span class="p">[</span><span class="n">v</span><span class="p">])[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_get_linear_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">LinearOperator</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">),</span> <span class="n">matvec</span><span class="o">=</span><span class="bp">self</span><span class="p">.</span><span class="n">_matvec</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="p">.</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eish_args</span><span class="p">:</span> <span class="n">EigshArgs</span><span class="p">):</span>
+        <span class="s">"""Simple wrapper around `scipy.sparse.linalg.eigsh`."""</span>
+        <span class="n">linear_operator</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">_get_linear_operator</span><span class="p">()</span>
+        <span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">eigsh</span><span class="p">(</span><span class="n">linear_operator</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">eish_args</span><span class="p">.</span><span class="n">k</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">sigma</span><span class="p">,</span>
+                                 <span class="n">which</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">which</span><span class="p">,</span> <span class="n">v0</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">v0</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">tol</span><span class="p">,</span>
+                                 <span class="n">return_eigenvectors</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">return_eigenvectors</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span>
+</code></pre></div></div>
+
+<p>A few things to note:</p>
+
+<ol>
+  <li>The <code class="language-plaintext highlighter-rouge">HessianAnalyzer</code> class encapsulates the entire eigenspectrum computation functionality, and provides a simple interface for interacting with the core module.</li>
+  <li>
+    <p>The <code class="language-plaintext highlighter-rouge">_matvec</code> method implements the Hessian-vector product. Since this is an important computation, it warrants some attention. First we make a simple observation - the Hessian is nothing but the Jacobian of the gradient. So, for a point \(\theta\) and a direction vector \(v\) in parameter space, we have \(\begin{equation}H_{\theta}\cdot v = J_{\theta}(\nabla \mathcal{L}) \cdot v\end{equation}\). The right hand side of the above equation is precisely what <code class="language-plaintext highlighter-rouge">_matvec</code> returns. More specifically, the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.grad.html#jax.grad"><code class="language-plaintext highlighter-rouge">grad()</code></a></strong> transformation computes the gradient of the loss function, and the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp"><code class="language-plaintext highlighter-rouge">jvp()</code></a></strong> transformation computes the Jacobian-vector product. (NOTE: <code class="language-plaintext highlighter-rouge">grad()</code> and <code class="language-plaintext highlighter-rouge">jvp()</code> are powerful and flexible transformations at the core of JAX’s <a href="https://docs.jax.dev/en/latest/automatic-differentiation.html">automatic differentiation</a> machinery.)</p>
+  </li>
+  <li>The <code class="language-plaintext highlighter-rouge">_get_linear_operator</code> method simply generates a <strong><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.LinearOperator.html"><code class="language-plaintext highlighter-rouge">LinearOperator</code></a></strong> object which provides a common interface for performing matrix-vector products.</li>
+  <li>The “public” <code class="language-plaintext highlighter-rouge">get_spectrum</code> method serves as the access point for users to invoke the <code class="language-plaintext highlighter-rouge">eigsh</code> routine for computing the Hessian eigenspectrum.</li>
+</ol>
+
+<p><strong>TIP</strong>: The running time of the entire eigenspectrum computation routine is hugely infulenced by the running time of the <code class="language-plaintext highlighter-rouge">_matvec</code> method since this method is called repeatedly from inside <code class="language-plaintext highlighter-rouge">eigsh</code> (for computing the Arnoldi vectors). The running time of <code class="language-plaintext highlighter-rouge">_matvec</code> is in turn dependent on the running time of <code class="language-plaintext highlighter-rouge">grad(self.loss)</code>, which in turn depends on the running time of <code class="language-plaintext highlighter-rouge">self.loss</code>. The overall performance can be dramatically improved by using JAX’s <a href="https://docs.jax.dev/en/latest/jit-compilation.html">just-in-time compilation</a> transformation <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jit.html#jax.jit"><code class="language-plaintext highlighter-rouge">jit()</code></a></strong> on <code class="language-plaintext highlighter-rouge">self.loss</code> (and possibly <code class="language-plaintext highlighter-rouge">grad(self.loss))</code>.</p>
+
+<p><strong>TIP</strong>: If the <code class="language-plaintext highlighter-rouge">v0</code> argument is set to <code class="language-plaintext highlighter-rouge">None</code>, <code class="language-plaintext highlighter-rouge">eigsh</code> will randomly generate a starting vector. This means a different set of eigenvectors will be returned by two identical calls to <code class="language-plaintext highlighter-rouge">eigsh</code>. This can lead to confusion. For the sake of reproducibility, it is better to generate a random vector yourself and supply it to <code class="language-plaintext highlighter-rouge">eigsh</code>.</p>
+
+<p>Now that we have reviewed the core module, let’s go ahead and invoke it for computating the Hessian eigenspectrum.</p>
+
+<h2 id="computing-the-hessian-eigenspectrum">Computing the Hessian eigenspectrum</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Create an analyzer instance
+</span><span class="n">ha</span> <span class="o">=</span> <span class="n">HessianAnalyzer</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span><span class="p">,</span> <span class="n">forward_copy_torch</span><span class="p">,</span> <span class="n">MSE_loss_copy</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+
+<span class="c1"># Configure arguments to be supplied to eigsh
+</span><span class="n">eigsh_args</span> <span class="o">=</span> <span class="n">EigshArgs</span><span class="p">(</span>
+    <span class="n">k</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+    <span class="n">sigma</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+    <span class="n">which</span><span class="o">=</span><span class="s">'LM'</span><span class="p">,</span>
+    <span class="n">v0</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+    <span class="n">tol</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span>
+    <span class="n">return_eigenvectors</span><span class="o">=</span><span class="bp">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Compute the eigenspectrum
+</span><span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">ha</span><span class="p">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">eigsh_args</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Done!</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># eigenvalues
+</span><span class="n">eigvals</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([-1.1432382 , -0.61654264,  0.1918977 ,  1.1418587 ,  1.3489572 ,
+       76.840744  ], dtype=float32)
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># eigenvectors
+</span><span class="n">eigvecs</span><span class="p">.</span><span class="n">shape</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(9, 6)
+</code></pre></div></div>
+
+<h1 id="a-tensorflow-example">A Tensorflow example</h1>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="n">tf</span>
+
+<span class="n">random</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1"># === Data ===
+</span><span class="n">X_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>   <span class="c1"># shape (2, 2)
+</span><span class="n">Y_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">5.</span><span class="p">,</span> <span class="mf">6.</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">).</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># shape (2, 1)
+</span>
+<span class="c1"># === Model Definition ===
+</span><span class="n">model</span> <span class="o">=</span> <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">Sequential</span><span class="p">([</span>
+    <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">layers</span><span class="p">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">'dense_1'</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,)),</span>  <span class="c1"># Hidden: 2x2
+</span>    <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">layers</span><span class="p">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">'dense_2'</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>                     <span class="c1"># Output: 2x1
+</span><span class="p">])</span>
+
+<span class="c1"># === Compile Model ===
+</span><span class="n">model</span><span class="p">.</span><span class="nb">compile</span><span class="p">(</span>
+    <span class="n">optimizer</span><span class="o">=</span><span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">optimizers</span><span class="p">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">),</span>
+    <span class="n">loss</span><span class="o">=</span><span class="s">'mse'</span>
+<span class="p">)</span>
+
+<span class="c1"># === Training ===
+</span><span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">epochs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Epoch 1/2
+WARNING:tensorflow:6 out of the last 11 calls to &lt;function TensorFlowTrainer._make_function.&lt;locals&gt;.multi_step_on_iterator at 0x17a48dd00&gt; triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+[1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 200ms/step - loss: 12.3536
+Epoch 2/2
+[1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 46ms/step - loss: 2.2821
+
+
+
+
+
+&lt;keras.src.callbacks.history.History at 0x17a470710&gt;
+</code></pre></div></div>
+
+<h2 id="generating-mediating-objects-1">Generating mediating objects</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 1. Model params
+</span><span class="k">def</span> <span class="nf">extract_tf_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">):</span>
+    <span class="n">param_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">model</span><span class="p">.</span><span class="n">layers</span><span class="p">:</span>
+        <span class="n">weights</span> <span class="o">=</span> <span class="n">layer</span><span class="p">.</span><span class="n">get_weights</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">weights</span><span class="p">:</span>  <span class="c1"># Skip layers without weights
+</span>            <span class="n">kernel</span><span class="p">,</span> <span class="n">bias</span> <span class="o">=</span> <span class="n">weights</span>
+            <span class="n">kernel_list</span> <span class="o">=</span> <span class="p">[[</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">kernel</span><span class="p">.</span><span class="n">tolist</span><span class="p">()]</span>
+            <span class="n">bias_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">bias</span><span class="p">.</span><span class="n">tolist</span><span class="p">()]</span>
+            <span class="c1"># Use standard naming: layer_name/kernel and layer_name/bias
+</span>            <span class="n">param_dict</span><span class="p">[</span><span class="sa">f</span><span class="s">"</span><span class="si">{</span><span class="n">layer</span><span class="p">.</span><span class="n">name</span><span class="si">}</span><span class="s">/kernel"</span><span class="p">]</span> <span class="o">=</span> <span class="n">kernel_list</span>
+            <span class="n">param_dict</span><span class="p">[</span><span class="sa">f</span><span class="s">"</span><span class="si">{</span><span class="n">layer</span><span class="p">.</span><span class="n">name</span><span class="si">}</span><span class="s">/bias"</span><span class="p">]</span> <span class="o">=</span> <span class="n">bias_list</span>
+    <span class="k">return</span> <span class="n">param_dict</span>
+
+<span class="n">params</span> <span class="o">=</span> <span class="n">extract_tf_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 2. Training data
+# # Not casting function needed since tensorflow and JAX both work directly with numpy arrays
+</span></code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 3. Output function
+</span><span class="k">def</span> <span class="nf">forward_copy_tf</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+    <span class="n">w1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_1/kernel'</span><span class="p">])</span>
+    <span class="n">b1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_1/bias'</span><span class="p">])</span>
+    <span class="n">w2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_2/kernel'</span><span class="p">])</span>
+    <span class="n">b2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_2/bias'</span><span class="p">])</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w1</span><span class="p">)</span> <span class="o">+</span> <span class="n">b1</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w2</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
+    <span class="k">return</span> <span class="n">x</span>
+
+<span class="c1"># Example input to test our output function
+</span><span class="n">x_input</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+
+<span class="n">orig_output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">tf</span><span class="p">.</span><span class="n">convert_to_tensor</span><span class="p">(</span><span class="n">x_input</span><span class="p">))</span>
+<span class="n">new_output</span> <span class="o">=</span> <span class="n">forward_copy_tf</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">jnp</span><span class="p">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">x_input</span><span class="p">))</span>
+
+<span class="k">print</span><span class="p">(</span><span class="s">'original output:'</span><span class="p">,</span> <span class="n">orig_output</span><span class="p">.</span><span class="n">numpy</span><span class="p">())</span>
+<span class="k">print</span><span class="p">(</span><span class="s">'new output: '</span><span class="p">,</span> <span class="n">new_output</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>original output: [[3.1914136]]
+new output:  [3.1914134]
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 4. Loss function
+# # We can use the existing generator function for MSE loss.
+</span>
+<span class="n">MSE_loss_copy_tf</span> <span class="o">=</span> <span class="n">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">forward_copy_tf</span><span class="p">)</span>
+
+<span class="c1"># Test that our loss matches the original model's loss
+## new loss
+</span><span class="n">params_flat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">new_loss</span> <span class="o">=</span> <span class="n">MSE_loss_copy_tf</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
+
+<span class="c1">## original loss
+</span><span class="n">predictions</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">X_np</span><span class="p">)</span>
+<span class="n">mse_loss_fn</span> <span class="o">=</span> <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">losses</span><span class="p">.</span><span class="n">MeanSquaredError</span><span class="p">()</span>
+<span class="n">original_loss</span> <span class="o">=</span> <span class="n">mse_loss_fn</span><span class="p">(</span><span class="n">Y_np</span><span class="p">,</span> <span class="n">predictions</span><span class="p">).</span><span class="n">numpy</span><span class="p">()</span>
+
+<span class="k">print</span><span class="p">(</span><span class="n">new_loss</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">original_loss</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>2.0336998
+2.0336993
+</code></pre></div></div>
+
+<h2 id="computing-the-hessian-eigenspectrum-1">Computing the Hessian eigenspectrum</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Create an analyzer instance
+</span><span class="n">ha</span> <span class="o">=</span> <span class="n">HessianAnalyzer</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">forward_copy_tf</span><span class="p">,</span> <span class="n">MSE_loss_copy_tf</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+
+<span class="c1"># Configure arguments to be supplied to eigsh
+</span><span class="n">eigsh_args</span> <span class="o">=</span> <span class="n">EigshArgs</span><span class="p">(</span>
+    <span class="n">k</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+    <span class="n">sigma</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+    <span class="n">which</span><span class="o">=</span><span class="s">'LM'</span><span class="p">,</span>
+    <span class="n">v0</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+    <span class="n">tol</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span>
+    <span class="n">return_eigenvectors</span><span class="o">=</span><span class="bp">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Compute the eigenspectrum
+</span><span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">ha</span><span class="p">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">eigsh_args</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">eigvals</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([ -1.2113413 ,  -0.8476425 ,   0.13638566,   0.99271876,
+         1.5289528 , 109.21992   ], dtype=float32)
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">eigvecs</span><span class="p">.</span><span class="n">shape</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(9, 6)
+</code></pre></div></div>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms. The goal of this post is to present a simple, JAX-based framework to address the above difficulty. This framework will help us: make the core numerical code platform-independent, allowing it to be optimized separately and used across models/platforms. formalize the changes needed to peripheral code when switching platforms, minimizing the possibility of errors. disentangle model training from Hessian analysis, facilitating the analysis of pre-trained models. (In my current SPAR project, we have used the above framework quite successfully.) NOTE: For analyzing a model, it is not necessary to train it ourselves as long as we have access to certain defining attributes of the model (details in post). NOTE: There are several reasons for choosing JAX for this task - performance, flexibility, math-like flavor, numpy-like interface, and the powerful Pytree abstraction for parameter handling (more on each of these in a future post). NOTE: Even if you don’t anticipate working across multiple platforms, you may still want to consider this framework for the above reasons. NOTE: This post assumes the reader is familiar with scipy.sparse.linalg.eigsh and how it can be used to compute the Hessian eigenspectrum via Hessian-vector products. (As a refresher, I recommend reading this post upto, but excluding, the implementation which is very Pytorch specific.) NOTE: The code presented here is written for simplicity and clarity, not for compute or memory efficiency. I will try to point out obvious optimizations where possible. NOTE: The code presented here runs on a single CPU/GPU/TPU. While JAX provides excellent primitives for distributed computations, these are out of scope for this post. A two-part framework The proposed framework has two parts: a core module that contains the numerical code to compute the hessian eigenspectrum a set of mediating objects that implement a standard interface for the core module (to interact with different platforms). In essence, the mediating objects are a platform-independent representations of the four defining attributes of a model: model parameters training data output function loss function For each new model we want to analyze, we first generate the mediating objects and then pass them on to the (platform-agnostic) core module for eigenspectrum computation. A key observation behind this framework is that numerical code (e.g. computing the eigenspectum) requires careful memory / compute optimizations and precision handling. As a result, such code should be independent of, and shared across all models/platforms. In particular, this code should not require changes when switching models/platforms. And, while some code changes are inevitable, these changes should be few and limited to parts that are easier to implement and test.]]></summary></entry><entry><title type="html">Verifying Neural Network Robustness with Linear Programming</title><link href="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/" rel="alternate" type="text/html" title="Verifying Neural Network Robustness with Linear Programming" /><published>2024-03-15T00:00:00-07:00</published><updated>2024-03-15T00:00:00-07:00</updated><id>http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming</id><content type="html" xml:base="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/"><![CDATA[<p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
+
+<p>Ensuring robustness of networks is important because neural networks are vulnerable to adversarial examples produced by small perturbations in the input. E.g. small changes in the image of a chihuahua can lead a network to <a href="https://www.freecodecamp.org/news/chihuahua-or-muffin-my-search-for-the-best-computer-vision-api-cbda4d6b425d/">classify it as a chocolate chip muffin</a>. Below, we take a simple but concrete example to illustrate how a non-robust network can be exploited.</p>
+
+<h1 id="fooling-a-toy-network">Fooling a toy network</h1>
+
+<p>Let’s start by finding an “adversarial example” with respect to a given training example for a toy fully connected feed forward neural network. Roughly speaking, and adversarial example is a point in the feature space that differs “very slightly” from an actual training example, but this difference is enough to cause the network to misclassify the adversarial example. (We will make these ideas precise shortly)</p>
+
+<p>We will use my personal project <a href="https://pypi.org/project/verifiNN/">verifiNN</a> (currently in alpha) for this. We will discuss the mathematical details of the package later in the post. For now, we will only use the package for illustration.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">!</span><span class="n">pip</span> <span class="n">install</span> <span class="n">verifiNN</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="n">pd</span>
+
+<span class="kn">from</span> <span class="nn">sklearn.datasets</span> <span class="kn">import</span> <span class="n">load_digits</span>
+
+<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
+</code></pre></div></div>
+
+<p>We will use the popular MNIST dataset of hand-written digits for our example. Each image in this dataset is an 8 X 8 image flattened to a vector of length 64.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">mnist</span> <span class="o">=</span> <span class="n">load_digits</span><span class="p">()</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">mnist</span><span class="p">.</span><span class="n">data</span><span class="p">),</span> <span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">mnist</span><span class="p">.</span><span class="n">target</span><span class="p">)</span> 
+</code></pre></div></div>
+
+<p>Next we need a classifier neural network which we will try to fool. Ideally, this would be a network that was trained on the above dataset. However, to keep things simple, we will use a toy network with random weights and biases instead.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Generate a random neural net
+</span><span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
+
+<span class="n">W1</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
+<span class="n">b1</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">64</span><span class="p">)</span>
+<span class="n">W2</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
+<span class="n">b2</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+
+<span class="n">weights</span> <span class="o">=</span> <span class="p">[</span><span class="n">W1</span><span class="p">,</span> <span class="n">W2</span><span class="p">];</span> <span class="n">biases</span> <span class="o">=</span> <span class="p">[</span><span class="n">b1</span><span class="p">,</span> <span class="n">b2</span><span class="p">]</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">verifiNN.models.network</span> <span class="kn">import</span> <span class="n">Network</span>
+<span class="kn">from</span> <span class="nn">verifiNN.verifier</span> <span class="kn">import</span> <span class="n">LPVerifier</span>
+
+<span class="n">network</span> <span class="o">=</span> <span class="n">Network</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">biases</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s">'ReLU'</span><span class="p">,</span> <span class="n">labeler</span><span class="o">=</span><span class="s">'argmax'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Now that we have a network, we want to select a reference example (from the training set) around which we will search for an adversarial example. We will also need to specify a search radius.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># select a reference input
+</span><span class="n">x_0</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">X_train</span><span class="p">.</span><span class="n">loc</span><span class="p">[</span><span class="mi">9</span><span class="p">])</span>  <span class="c1"># select the example at row index 9
+</span>
+<span class="c1"># search radius
+</span><span class="n">epsilon</span> <span class="o">=</span> <span class="mi">5</span>
+</code></pre></div></div>
+
+<p>Below are the entries of our reference example followed by the corresponding image</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">x_0</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([ 0.,  0., 11., 12.,  0.,  0.,  0.,  0.,  0.,  2., 16., 16., 16.,
+       13.,  0.,  0.,  0.,  3., 16., 12., 10., 14.,  0.,  0.,  0.,  1.,
+       16.,  1., 12., 15.,  0.,  0.,  0.,  0., 13., 16.,  9., 15.,  2.,
+        0.,  0.,  0.,  0.,  3.,  0.,  9., 11.,  0.,  0.,  0.,  0.,  0.,
+        9., 15.,  4.,  0.,  0.,  0.,  9., 12., 13.,  3.,  0.,  0.])
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">plt</span><span class="p">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x_0</span><span class="p">,</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s">'C'</span><span class="p">),</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'gray'</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="n">show</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p><img src="../assets/files/images/verifiNN_demo_14_0.png" alt="png" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">network</span><span class="p">.</span><span class="n">classify</span><span class="p">(</span><span class="n">x_0</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>9
+</code></pre></div></div>
+
+<p>Clearly, the above image is that of the digit <code class="language-plaintext highlighter-rouge">9</code> and our network has correctly classified it. Now we will try to fool the network by finding an adversarial example.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">lpvf</span> <span class="o">=</span> <span class="n">LPVerifier</span><span class="p">()</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">lpvf</span><span class="p">.</span><span class="n">compute_pointwise_robustness</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">x_0</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">x_0_tilde</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s">'adversarial_example'</span><span class="p">]</span>
+<span class="n">x_0_tilde</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([-4.7920852 , -4.79208515,  6.20791488,  7.20791487, -4.79208522,
+       -4.7920852 , -4.79208489, -4.79208523, -4.7920851 , -2.7920851 ,
+       11.20791484, 11.20791476, 11.20791512,  8.20791481, -4.7920852 ,
+       -4.7920852 , -4.79208524,  7.79208396, 11.20791481,  7.20791497,
+        5.20791511, 18.79208499, -4.79208522,  4.79208101, -4.79208524,
+       -3.79208507, 11.20791491, -3.79208524,  7.20791478, 10.20791479,
+       -4.79208514, -4.79208524, -4.79208521, -4.7920852 ,  8.20791491,
+       11.20791479,  4.20791478, 10.20791481, -2.79208521, -4.79208522,
+       -4.79208523, -4.79208524, -4.79208517, -1.79208524, -4.79208515,
+       13.79208457,  6.20791476,  4.72495082, -4.79208523, -4.7920852 ,
+       -4.79208521, -4.79208521,  4.20791477, 10.20791478, -0.79208514,
+       -4.79207914, -4.79208505, -4.79208409,  6.51396684,  7.20791475,
+        8.20791476, -1.7920852 , -4.7920852 , -4.79208521])
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">plt</span><span class="p">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x_0_tilde</span><span class="p">,</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s">'C'</span><span class="p">),</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'gray'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;matplotlib.image.AxesImage at 0x7f8cc7b5cd90&gt;
+</code></pre></div></div>
+
+<p><img src="../assets/files/images/verifiNN_demo_19_1.png" alt="png" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">network</span><span class="p">.</span><span class="n">classify</span><span class="p">(</span><span class="n">x_0_tilde</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0
+</code></pre></div></div>
+
+<p>To a human observer, it is (hopefully) clear that the above image is a <code class="language-plaintext highlighter-rouge">9</code> and not a <code class="language-plaintext highlighter-rouge">0</code>. <strong>To the network, however, this looks like a <code class="language-plaintext highlighter-rouge">0</code></strong>. Thus, we have located an adversarial example <code class="language-plaintext highlighter-rouge">x_0_tilde</code> that differs “very slightly” from the reference example <code class="language-plaintext highlighter-rouge">x_0</code>, but the slight difference is enough for the network to misclassify it (as a <code class="language-plaintext highlighter-rouge">0</code>).</p>
+
+<p>Now, some obvious call outs:</p>
+<ul>
+  <li>Our network was a very small, random network. Fooling such a network is relatively easy.</li>
+  <li>The “slight difference” between <code class="language-plaintext highlighter-rouge">x_0</code> and <code class="language-plaintext highlighter-rouge">x_0_tilde</code> is not so slight. In fact <code class="language-plaintext highlighter-rouge">x_0_tilde</code> is at a distance of approx. 4.792 from <code class="language-plaintext highlighter-rouge">x_0</code>.</li>
+  <li>Radius of search \(\epsilon = 5\) is pretty large. The closer the adversarial example is to an actual training example, the harder it will be to detect by sight.</li>
+</ul>
+
+<p>Despite the above shortcomings, the above example serves the purpose of providing concrete intuition about why robustness of neural networks is important. In the subsequent sections, we will make the notion of robustness more precise. We will then explore how we can verify the robustness of a <em>trained</em> neural network using a very popular idea from mathematical optimization, viz. <em>Linear Programming</em>.</p>
+
+<h1 id="problem-setup">Problem setup</h1>
+
+<p>Suppose we are given a fully connected, feed forward <em>K-class classifier</em> neural network that was trained using the ReLU activation function. Note that the weights and biases of this network are fixed. Suppose the network accepts real vectors of length \(n\) as inputs and let \(F: \mathbb{R}^n \longrightarrow \{1, 2, ..., K\}\) represent the network classification function. Then we can write \(F\) as a composition of a <em>network output function</em> and a <em>labeling function</em> as described below.</p>
+
+<p>Let \(W_i\) and \(b_i\) represent the weight matrix and the bias vector of the \(i\)th layer respectively. Then we can write the output of the \(i\)th layer recursively as follows:</p>
+
+\[\begin{equation} \tag{1}
+    z_{i} = \phi(W_{i} z_{i-1} + b_{i}) = \phi \circ \omega_i(z_{i - 1})
+\end{equation}\]
+
+<p>where \(\omega_i\) represents the affine transformation corresponding to the \(i\)th layer and \(\phi\) represents the “vectorized” version of the activation function, i.e. \(\phi(x_1, ..., x_n) = (\phi(x_1), ..., \phi(x_n))\). The network output function \(f_W: \mathbb{R}^n \longrightarrow \mathbb{R}^K\) is defined as:</p>
+
+\[\begin{equation}\tag{2}
+    f_W(x) = \phi \circ \omega_{H+1} \circ \dots \circ \phi \circ \omega_1(x)
+\end{equation}\]
+
+<p>where \(H\) is the number of hidden layers in the network. The labeling function \(\pi: \mathbb{R}^K \longrightarrow \{1, 2, ..., K\}\) is defined as:</p>
+
+\[\begin{equation}\tag{3}
+\pi(y) = \underset{i = 1, ... , K}{\text{arg max}}\ y_i
+\end{equation}\]
+
+<p>where \(K\) is the number of classes. For a given input \(x_0\), we have:</p>
+
+\[\begin{equation}\tag{4}
+    F(x_0) = \pi(f_W(x_0)) = l_0
+\end{equation}\]
+
+<p>with \(l_0\) is the class label assigned to \(x_0\) by the network. It is worth noting that we can use a different labeling function here, e.g. <em>softmax</em>, without affecting our analysis as long as the labeling function of choice is non-decreasing.</p>
+
+<p><img src="../assets/files/images/pi_fw.png" width="350" length="350" align="center" /></p>
+
+<h2 id="polyhedron-induced-by-a-class-label">Polyhedron induced by a class label</h2>
+
+<p>Suppose our classifier network has \(K\) class labels. The co-domain \(\mathbb{R}^K\) of the output function can be partitioned into \(K\) polyhedra. Consider the half-space \(\mathcal{H}_{l &gt; i}\) of all the points in \(\mathbb{R}^K\) where the \(l\)th component is greater than the \(i\)th component.</p>
+
+\[\begin{equation}\tag{5}
+    \mathcal{H}_{l &gt; i} := \{y \in \mathbb{R}^K : y_l &gt; y_i\}
+\end{equation}\]
+
+<p>Suppose we fix \(l\) and take the intersection of all half-spaces \(\mathcal{H}_{l &gt; i}\), \(i \ne l\). We get the set \(S_l\) of points where the \(l\)th component is greater than every other component. (For simplicity, we assume that there are no ties among the components of \(y\), i.e. \(i \ne j \implies y_i \ne y_j\).)</p>
+
+\[\begin{equation}\tag{6}
+    S_l := \bigcap_{i \ne l} \mathcal{H}_{l &gt; i} = \{y \in \mathbb{R}^K: y_l &gt; y_i, i \ne l\}
+\end{equation}\]
+
+<p>Note that:</p>
+<ul>
+  <li>\(S_l\) is an intersection of half-spaces and is therefore a polyhedron.</li>
+  <li>\(S_i \bigcap S_j = \emptyset\) for \(i \ne j\).</li>
+  <li>\(\{S_1, ..., S_K\}\) forms a partition of \(\mathbb{R}^K\).</li>
+</ul>
+
+<p><strong>Definition</strong> <strong><em>[Polyhedron induced by a class label].</em></strong> <em>Suppose we are given a K-class classifier network and a class label \(l \in \{1, 2, ..., K\}\). Then we say that the set</em></p>
+
+\[S_{l} = \{y \in \mathbb{R}^K: y_{l} &gt; y_i, i \ne l\}\]
+
+<p><em>is the polyhedron induced by the class label \(l\).</em></p>
+
+<p><strong>Remark.</strong> The output function maps an input to the corresponding induced polyhedron. Let \(x_0 \in \mathbb{R}^n\) be an input to a classifier network with classification function \(F\) and output function \(f_W\). Then,</p>
+
+\[\begin{equation*}
+     F(x_0) = l_0 \iff f_W(x_0) \subset S_{l_0}
+\end{equation*}\]
+
+<p>In other words, the network assigns the class label \(l_0\) to the input \(x_0\) if and only if \(f_W(x_0)\) lies inside the polyhedron induced by \(l_0\).</p>
+
+<p><img src="../assets/files/images/pi_maps_Si_to_i.png" width="500" length="500" align="center" /></p>
+
+<h2 id="formalizing-robustness-for-classifier-networks">Formalizing robustness for classifier networks</h2>
+<p>Recall that we say a classifier network is robust if small perturbations to an input do not affect its classification. Let us define a set that contains all “small” perturbations of the reference input \(x_0\). We will call this set the <em>region of interest</em>. For our purposes, we will choose this set to be the \(\epsilon\)-ball around the refence input \(x_0\).</p>
+
+<p><strong>Definition</strong> <strong><em>[Region of inerest around an input].</em></strong> <em>Let \(x_0 \in \mathbb{R}^n\) be a reference input. Then the set</em></p>
+
+\[\mathcal{B}_{\infty}(x_0, \epsilon) = \{x: \parallel x - x_0 \parallel_{\infty} \le \epsilon \}\]
+
+<p><em>is called the region of interest around \(x_0\).</em></p>
+
+<p><strong>Definition</strong> <strong><em>[Safety set induced by an input].</em></strong> <em>Suppose the network assigns the class label \(l_0\) to a reference input \(x_0\). Then the set \(S_{l_0}\) is called the safety set induced by \(x_0\).</em></p>
+
+<p>For our network to be robust, it must assign the same class to all points in \(\mathcal{B}_{\infty}(x_0, \epsilon)\) i.e. \(F(x) = F(x_0) = l_0\) for all \(x \in \mathcal{B}_{\infty}(x_0, \epsilon)\). This is equivalent to saying \(f_W(x) \in S_{l_0}\) for all \(x \in \mathcal{B}_{\infty}(x_0, \epsilon)\). In other words, we want the image of the region of interest to lie inside the safety set induced by \(x_0\). The verification problem then reduces to asking the below set membership question:</p>
+
+\[\begin{equation*}
+    f_W(\mathcal{B}_{\infty}(x_0, \epsilon)) \stackrel{?}{\subset} S_{l_0}
+\end{equation*}\]
+
+<p>We are now ready to give a formal definition of robustness.</p>
+
+<p><strong>Definition</strong> <strong><em>[\(\epsilon\)-robustness].</em></strong> <em>We say that a neural network is \(\epsilon\)-robust at \(x_0\) if and only if</em></p>
+
+\[\begin{equation*}
+    f_W(\mathcal{B}_\infty (x_0, \epsilon)) \subset S_{l_0}
+\end{equation*}\]
+
+<p><strong>Definition</strong> <strong><em>[Adversarial example].</em></strong> <em>A point \(\tilde{x} \in \mathbb{R}^n\) is said to be an adversarial example if</em></p>
+
+\[\begin{equation*}
+    \tilde{x} \in \mathcal{B}_\infty (x_0, \epsilon),\ \ f_W(\tilde{x}) \notin S_{l_0}
+\end{equation*}\]
+
+<p>The two-class classifier network shown in the figure below is not \(\epsilon\)-robust at \(x_0\) since \(\tilde{x}\) is an adversarial example.</p>
+
+<p><img src="../assets/files/images/adversarial_example.png" width="500" length="500" align="center" /></p>
+
+<p>It is worth noting that a network is \(\epsilon\)-robust if and only if an adversarial example does not exist.</p>
+
+<h1 id="verification-as-an-optimization-problem">Verification as an optimization problem</h1>
+<p>Recall that, given a trained \(H\)-hidden-layer neural network with the output function \(f_W\), a reference input point \(x_0\) and a positive \(\epsilon\), we want to answer the following question:</p>
+
+<p>Does the image of the region of inteterest lie inside the safety set?</p>
+
+\[\begin{equation*}
+    f_W(\mathcal{B}_\infty(x_0, \epsilon)) \stackrel{?}{\subset} S_{l_0}
+\end{equation*}\]
+
+<p>Or, equivalently, does there exist an adversarial example?</p>
+
+\[\begin{equation*}
+    \stackrel{?}{\exists} \tilde{x} \in \mathcal{B}_\infty(x_0, \epsilon)\ s.\ t.\ f_W(\tilde{x}) \notin S_{l_0}
+\end{equation*}\]
+
+<p>which is the same as solving the following satisfiability problem in optimization</p>
+
+\[\begin{gather}\tag{7}
+    \text{Find}\ z_0\\
+    \text{s.t.}\ z_0 \in \mathcal{B}_\infty(x_0, \epsilon)\\
+    z_{H + 1} = f_W(z_0)\\
+    z_{H+1} \notin S_{l_0}
+\end{gather}\]
+
+<p>where \(z_0 \in \mathbb{R}^n\) and \(z_{H+1} \in \mathbb{R}^K\) are the decision variables. Now, let \(\tilde{z_i}\) and \(z_i\) denote the denote the pre- and post-activation output of the \(i\)th layer of the network. In other words</p>
+
+\[\begin{equation}\tag{eq_z_i_z_i_hat}
+    \begin{split}
+        \tilde{z_i} &amp;= W_i z_{i -1} + b_i ,\qquad i = 1, ..., H + 1\\
+        z_i &amp;= ReLU(\tilde{z_i}), \qquad i = 1, ..., H + 1
+    \end{split}
+\end{equation}\]
+
+<p>Then we can replace the constraint \(z_{H+1} = f_W(z_0)\) in (7) with the equations (eq_z_i_z_i_hat). This gives us the following equivalent form of the satisfiability problem</p>
+
+\[\begin{gather}
+\text{Find}\ z_0\\
+\text{s.t.}\ z_0 \in \mathcal{B}_\infty(x_0, \epsilon) \tag{8}\\
+\tilde{z_i} = W_i z_{i -1} + b_i \quad i = 1, ..., H + 1 \tag{9}\\
+    z_i = ReLU(\tilde{z_i})  \quad i = 1, ..., H + 1 \tag{10}\\
+    z_{H+1} \notin S_{l_0} \tag{11}
+\end{gather}\]
+
+<p>where \(z_0, \tilde{z_1}, z_1, \tilde{z_2}, z_2, ..., \tilde{z}_{H+1}, z_{H+1}\) are the decision variables. We will refer to (8) as the <em>region of interest constraint</em>, (9) as the <em>affine constraint</em>, (10) as the <em>ReLU constraint</em>, and (11) as the <em>safety set constraint</em>. We will sometimes refer to (9) and (10) together as the <em>network constraint</em> and write it as \(z_{H+1} = f_W(z_0)\).</p>
+
+<p>Note that if the above optimization problem is feasible then our network is not robust. Conversely, if the problem is infeasible then our network is robust. Also note that the above problem is not a convex optimization problem. This is because, the ReLU and safety set constraints are not convex. This non-convexity of constraints makes it hard to solve the above optimization problem in its current form. Next, we will replace these non-convex constraints with their convex formulations / approximations.</p>
+
+<h2 id="convexifying-the-relu-constraint">Convexifying the ReLU constraint.</h2>
+
+<p>Note that \(f_W\) is not a convex function. However, we know that \(f_W\) is <em>piece-wise affine</em>. Suppose we can find a convex set \(\chi' \subset \mathbb{R}^n\), such that \(f_W\) is affine on \(\chi'\). Then, we can replace the network constraint constraint \(z_{H+1} = f_W(z_0)\) with the following convex approximation:</p>
+
+\[\begin{equation}\tag{12}
+    z_{H+1} = f_W|_{\chi'}(z_0) 
+\end{equation}\]
+
+<p>where \(f_W\mid_{\chi'}\) is the restriction of \(f_W\) to \(\chi'\). But how do we even begin to look for such a \(\chi'\)? As a starting point, it is helpful to note that we want \(\chi' \bigcap \mathcal{B}_\infty(x_0, \epsilon)\) to be non-empty. This is to ensure that (12) above does not conflict with (8). Said differently, we want \(\chi'\) to contain \(x_0\) as well as points that are “close” to \(x_0\). We will use this idea to find the desired \(\chi'\).</p>
+
+<p>Observe that as our reference input \(x_0\) propagates through the network, it causes some neurons to be “activated” in each layer while others remain inactive. For a given input this activation pattern is fixed. Now, the main idea is that <em>points that are close to \(x_0\) are likely to produce the same activation pattern as \(x_0\)</em>. So, it might be useful to look for a set that contains all inputs that produce the same activation pattern as \(x_0\). Using the notation introduced in (eq_z_i_z_i_hat), the pre- and post-activation outputs of the \(i\)th layer produced by our reference input \(x_0\) are</p>
+
+\[\begin{equation*}
+    \begin{split}
+        \tilde{x}_i &amp;= W_i {x}_{i-1} + b_i ,\qquad i = 1, ..., H + 1\\
+        {x}_i &amp;= ReLU(\tilde{x}_i) ,\qquad i = 1, ..., H + 1\\
+    \end{split}
+\end{equation*}\]
+
+<p>We say that the \(j\)th neuron in the \(i\)th layer is <em>activated</em> by the reference input \(x_0\) if the \(j\)th component of \(x_i\) is positive, i.e. \((x_i)_j &gt; 0\). The activation status of the \(j\)th neuron in the \(i\)th layer can be described by a binary constant</p>
+
+\[\begin{equation*}
+    \delta_{i,j} =
+    \begin{cases}
+        1 \quad\text{if}\ (\tilde{x}_i)_j &gt; 0\\
+        0 \quad\text{if}\ (\tilde{x}_i)_j \le 0
+    \end{cases}
+\end{equation*}\]
+
+<p>The activation pattern of the \(i\)th layer can then be expressed succinctly by the following diagonal matrix</p>
+
+\[\begin{equation*}
+    \Delta_i :=
+    \begin{pmatrix}
+        \delta_{i,1} &amp; 0 &amp; 0 &amp; 0 &amp; 0\\
+        0 &amp; \delta_{i,2} &amp; 0 &amp; 0 &amp; 0\\
+        \vdots &amp; \vdots &amp; \vdots &amp; \vdots &amp; \vdots\\
+        0 &amp; 0 &amp; 0 &amp; 0 &amp; \delta_{i,d_i}\\
+    \end{pmatrix} 
+\end{equation*}\]
+
+<p>where \(d_i\) is the number of neurons in the \(i\)th layer. Note that the linear operator \(\Delta_i: \mathbb{R}^{d_i} \longrightarrow \mathbb{R}^{d_i}\) is nothing but a projection map. Now, recall the definition of the network output function \(f_W\) given in (2) where \(\phi\) is chosen to be \(ReLU\). Suppose we were to replace the composition \(\phi \circ \omega_i\) with the composition \(\Delta_i \circ \omega_i\) in (2). The resulting output function, \(f_{W_0}\), is given by</p>
+
+\[\begin{equation*}\tag{13}
+    f_{W_0} = \Delta_{H+1} \circ \omega_{H+1} \circ \dots \circ \Delta_1 \circ \omega_1
+\end{equation*}\]
+
+<p>We make some important observations about \(f_{W_0}\).</p>
+
+<ul>
+  <li>\(f_{W_0}\) is an affine function</li>
+  <li>\(f_{W_0}(z) = f_W(z)\) for every \(z\) that produces the same activation pattern as \(x_0\).</li>
+</ul>
+
+<p>The first point follows from the fact that \(f_{W_0}\) is a composition of affine functions. The second point follows from the fact that, in computing the network output, \(f_{W_0}\) only considers neurons that were activated by the reference input \(x_0\) and ignores all other neurons (do you see why?). From the above observations, it seems that a good candidate for \(\chi'\) may be:</p>
+
+\[\begin{equation*}
+\begin{split}
+     \chi' &amp;= \{z \in \mathbb{R}^n : z\ \text{produces the same activation pattern as } x_0 \}\\
+     &amp;= \{z \in \mathbb{R}^n: f_W(z) = f_{W_0}(z)\}
+\end{split}
+\end{equation*}\]
+
+<p>So, finding \(\chi'\) simply reduces to solving the equation \(f_W(z) = f_{W_0}(z)\), i.e.</p>
+
+\[\begin{equation*}
+    \phi \circ \omega_{H+1} \circ \dots \circ \phi \circ \omega_1(z) = \Delta_{H+1} \circ \omega_{H+1} \circ \dots \circ \Delta_1 \circ \omega_1(z)
+\end{equation*}\]
+
+<p>which can be written as</p>
+
+\[\begin{equation*}
+    \phi \circ \omega_i (z_{i-1}) = \Delta_i \circ \omega_i (z_{i - 1})\ ,\ i = 1, ..., H+1
+\end{equation*}\]
+
+<p>which is equivalent to solving for \(z_0, z_1, ..., z_{H+1}\) in</p>
+
+\[\begin{equation}\tag{14}
+    ReLU(W_i z_{i-1} + b_i) = \Delta_i (W_i z_{i-1} + b_i)\ ,\ i = 1, ..., H+1
+\end{equation}\]
+
+<p>Solving (14) directly is hard. Fortunately, (14) has the below equivalent affine formulation.</p>
+
+\[\begin{equation}\tag{15}
+ (2 \Delta_i - I)(W_i z_{i -1} + b_i) \ge 0\ ,\ i = 1, ..., H+1
+\end{equation}\]
+
+<p>It can be shown that every \(z_0, z_1, ..., z_{H+1}\) that is a solution to (14) is also a solution to (15) and vice-versa. Substituting \(\tilde{z}_i = W_i z_{i -1} + b_i\) in (15), we can approximate the ReLU constraint (10) by the following <em>convex</em> constraints</p>
+
+\[\begin{equation*}\tag{eq_convexified_relu}
+\begin{split}
+    (2 \Delta_i - I)\tilde{z}_i &amp;\ge 0 \\
+    z_i = \Delta_i &amp;\tilde{z}_{i}
+\end{split}
+\end{equation*}\]
+
+<h2 id="convexifying-the-safety-set-constraint">Convexifying the safety set constraint</h2>
+
+<p>Note that the safety set constraint (11) imples that if a feasible solution to our satisfiability problem exists then it must lie outside \(S_{l_0}\), i.e. it must lie inside \(\mathbb{R}^K \backslash S_{l_0}\). Recall that \(S_{l_0}\) is the polyhedron induced by the class label \(l_0\). In other words, \(S_{l_0}\) is the set of points where the largest component is at index \(l_0\). Therefore, \(\mathbb{R}^K \backslash S_{l_0}\) is the set of points where the largest component is at some index \(l' \ne l_0\).</p>
+
+<p>Instead of looking everywhere inside \(\mathbb{R}^K \backslash S_{l_0}\) (which is a non-convex set), we start by looking in the region where the component at index \(l'\) is greater than the component at index \(l_0\). This set is simply the half space \(\mathcal{H}_{l_0 &lt; l'}\). We can now replace (11}) with the below convex constraint:</p>
+
+\[\begin{equation*}
+    z_{H+1} \in \mathcal{H}_{l_0 &lt; l'}
+\end{equation*}\]
+
+<p>Repeating the above process for each \(l' \ne l_0\) gives us \(K-1\) convex problems that can be solved easily one at a time.</p>
+
+<h1 id="putting-it-all-together">Putting it all together</h1>
+<p>We now write down our original (non-convex) satisfiability problem</p>
+
+\[\begin{gather*}
+    \text{Find}\ z_0\\
+    \text{s.t.}\ z_0 \in \mathcal{B}_\infty(x_0, \epsilon)\\
+    \tilde{z_i} = W_i z_{i -1} + b_i \qquad &amp;i = 1, ..., H + 1 \\ \tag{Non-Conv}
+        z_i = ReLU(\tilde{z_i})  \qquad &amp;i = 1, ..., H + 1 \\
+        z_{H+1} \notin S_{l_0}
+\end{gather*}\]
+
+<p>and its convex modification</p>
+
+\[\begin{gather*}
+    \text{Find}\ z_0\\
+    \text{s.t.}\ z_0 \in \mathcal{B}_\infty(x_0, \epsilon)\\
+    \tilde{z_i} = W_i z_{i -1} + b_i \qquad &amp;i = 1, ..., H + 1 \\ \tag{Conv}
+        (2 \Delta_i - I)\tilde{z}_i \ge 0 \qquad &amp;i = 1, ..., H + 1\\
+        z_i = \Delta_i \tilde{z}_i  \qquad &amp;i = 1, ..., H + 1 \\
+        z_{H+1} \in \mathcal{H}_{l_0 &lt; l'}
+\end{gather*}\]
+
+<p>where (Conv) must be solved \(K -1\) times with varying \(l'\). Note that (Conv) is a convex (in fact affine) problem and can be easily solved with the help of any Linear Programming solver.</p>
+
+<h1 id="conclusion">Conclusion</h1>
+<p>In this post we defined the notion of robustness of a neural network and formulated the verificaion of robustness as an optimization problem. We then proposed a convex, LP approximation of this problem which can be solved easily with any linear programming solver.</p>
+
+<p>It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies <em>non-robustness</em>. However, infeasibility of (Conv) does <em>not</em> certify <em>robustness</em>. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example.</p>
+
+<h1 id="references">References</h1>
+
+<p>[1] Michael Andrew Roark. <em>Formal Verification of Neural Networks via Optimization Methods.</em> Masters Thesis (2022). Department of Mathematics, San Francisco State University. URL: https://doi.org/10.46569/20.500.12680/4t64gv41s</p>
+
+<p>[2] Changliu Liu, et al. <em>Algorithms for Verifying Deep Neural Networks.</em> (2020) URL: https://arxiv.org/abs/1903.06758</p>
+
+<p>[3] Mahyar Fazlyab, et al. <em>Safety Verification and Robustness Analysis of Neural Networks via Quadratic Constraints and Semidefinite Programming.</em> (2021) URL: 
+https://doi.org/10.48550/arXiv.1903.01287</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[Robustness is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.]]></summary></entry><entry><title type="html">Parametric Mixed-Integer Programming for Unit Commitment in Power Systems</title><link href="http://localhost:4000/unit-commitment-problem/" rel="alternate" type="text/html" title="Parametric Mixed-Integer Programming for Unit Commitment in Power Systems" /><published>2023-06-05T00:00:00-07:00</published><updated>2023-06-05T00:00:00-07:00</updated><id>http://localhost:4000/unit-commitment-problem</id><content type="html" xml:base="http://localhost:4000/unit-commitment-problem/"><![CDATA[<p>The Unit Commitment Problem (UCP) <a href="#References">[1]</a> in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minimize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.</p>
 
 <hr />
 <h1 id="table-of-contents">Table of Contents</h1>
@@ -4382,433 +5309,4 @@ Edge: Saratov-&gt;Orenburg 95000
 
 <p>Notebook available at:</p>
 
-<p>https://github.com/ayusbhar2/optimization/blob/main/applications/network_optimization/network_optimization.ipynb</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[[Source: Frederick S. Hillier and Gerald J. Lieberman. Introduction to Operations Research - 7th ed., 2000, McGraw-Hill, ISBN 0-07-232169-5] A rebel army is attempting to overthrow the elected government of the Russian Federation. The United States government has decided to assist its ally by quickly sending troops and supplies to the Federation. A plan needs to be developed for shipping the troops and supplies most effectively. Depending on the overall measure of performance, the analysis requires formulating and solving a shortest-path problem, a minimum cost flow problem, or a maximum flow problem.]]></summary></entry><entry><title type="html">Verifying Neural Network Robustness with Linear Programming</title><link href="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/" rel="alternate" type="text/html" title="Verifying Neural Network Robustness with Linear Programming" /><published>2023-05-17T00:00:00-07:00</published><updated>2023-05-17T00:00:00-07:00</updated><id>http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming</id><content type="html" xml:base="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/"><![CDATA[<p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
-
-<p>Ensuring robustness of networks is important because neural networks are vulnerable to adversarial examples produced by small perturbations in the input. E.g. small changes in the image of a chihuahua can lead a network to <a href="https://www.freecodecamp.org/news/chihuahua-or-muffin-my-search-for-the-best-computer-vision-api-cbda4d6b425d/">classify it as a chocolate chip muffin</a>. Below, we take a simple but concrete example to illustrate how a non-robust network can be exploited.</p>
-
-<h1 id="fooling-a-toy-network">Fooling a toy network</h1>
-
-<p>Let’s start by finding an “adversarial example” with respect to a given training example for a toy fully connected feed forward neural network. Roughly speaking, and adversarial example is a point in the feature space that differs “very slightly” from an actual training example, but this difference is enough to cause the network to misclassify the adversarial example. (We will make these ideas precise shortly)</p>
-
-<p>We will use my personal project <a href="https://pypi.org/project/verifiNN/">verifiNN</a> (currently in alpha) for this. We will discuss the mathematical details of the package later in the post. For now, we will only use the package for illustration.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">!</span><span class="n">pip</span> <span class="n">install</span> <span class="n">verifiNN</span>
-</code></pre></div></div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
-<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="n">pd</span>
-
-<span class="kn">from</span> <span class="nn">sklearn.datasets</span> <span class="kn">import</span> <span class="n">load_digits</span>
-
-<span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
-</code></pre></div></div>
-
-<p>We will use the popular MNIST dataset of hand-written digits for our example. Each image in this dataset is an 8 X 8 image flattened to a vector of length 64.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">mnist</span> <span class="o">=</span> <span class="n">load_digits</span><span class="p">()</span>
-</code></pre></div></div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span> <span class="o">=</span> <span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">mnist</span><span class="p">.</span><span class="n">data</span><span class="p">),</span> <span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">mnist</span><span class="p">.</span><span class="n">target</span><span class="p">)</span> 
-</code></pre></div></div>
-
-<p>Next we need a classifier neural network which we will try to fool. Ideally, this would be a network that was trained on the above dataset. However, to keep things simple, we will use a toy network with random weights and biases instead.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Generate a random neural net
-</span><span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
-
-<span class="n">W1</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
-<span class="n">b1</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">64</span><span class="p">)</span>
-<span class="n">W2</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span>
-<span class="n">b2</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
-
-<span class="n">weights</span> <span class="o">=</span> <span class="p">[</span><span class="n">W1</span><span class="p">,</span> <span class="n">W2</span><span class="p">];</span> <span class="n">biases</span> <span class="o">=</span> <span class="p">[</span><span class="n">b1</span><span class="p">,</span> <span class="n">b2</span><span class="p">]</span>
-</code></pre></div></div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">verifiNN.models.network</span> <span class="kn">import</span> <span class="n">Network</span>
-<span class="kn">from</span> <span class="nn">verifiNN.verifier</span> <span class="kn">import</span> <span class="n">LPVerifier</span>
-
-<span class="n">network</span> <span class="o">=</span> <span class="n">Network</span><span class="p">(</span><span class="n">weights</span><span class="p">,</span> <span class="n">biases</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="s">'ReLU'</span><span class="p">,</span> <span class="n">labeler</span><span class="o">=</span><span class="s">'argmax'</span><span class="p">)</span>
-</code></pre></div></div>
-
-<p>Now that we have a network, we want to select a reference example (from the training set) around which we will search for an adversarial example. We will also need to specify a search radius.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># select a reference input
-</span><span class="n">x_0</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">X_train</span><span class="p">.</span><span class="n">loc</span><span class="p">[</span><span class="mi">9</span><span class="p">])</span>  <span class="c1"># select the example at row index 9
-</span>
-<span class="c1"># search radius
-</span><span class="n">epsilon</span> <span class="o">=</span> <span class="mi">5</span>
-</code></pre></div></div>
-
-<p>Below are the entries of our reference example followed by the corresponding image</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">x_0</span>
-</code></pre></div></div>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([ 0.,  0., 11., 12.,  0.,  0.,  0.,  0.,  0.,  2., 16., 16., 16.,
-       13.,  0.,  0.,  0.,  3., 16., 12., 10., 14.,  0.,  0.,  0.,  1.,
-       16.,  1., 12., 15.,  0.,  0.,  0.,  0., 13., 16.,  9., 15.,  2.,
-        0.,  0.,  0.,  0.,  3.,  0.,  9., 11.,  0.,  0.,  0.,  0.,  0.,
-        9., 15.,  4.,  0.,  0.,  0.,  9., 12., 13.,  3.,  0.,  0.])
-</code></pre></div></div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">plt</span><span class="p">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x_0</span><span class="p">,</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s">'C'</span><span class="p">),</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'gray'</span><span class="p">)</span>
-<span class="n">plt</span><span class="p">.</span><span class="n">show</span><span class="p">()</span>
-</code></pre></div></div>
-
-<p><img src="../assets/files/images/verifiNN_demo_14_0.png" alt="png" /></p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">network</span><span class="p">.</span><span class="n">classify</span><span class="p">(</span><span class="n">x_0</span><span class="p">)</span>
-</code></pre></div></div>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>9
-</code></pre></div></div>
-
-<p>Clearly, the above image is that of the digit <code class="language-plaintext highlighter-rouge">9</code> and our network has correctly classified it. Now we will try to fool the network by finding an adversarial example.</p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">lpvf</span> <span class="o">=</span> <span class="n">LPVerifier</span><span class="p">()</span>
-<span class="n">result</span> <span class="o">=</span> <span class="n">lpvf</span><span class="p">.</span><span class="n">compute_pointwise_robustness</span><span class="p">(</span><span class="n">network</span><span class="p">,</span> <span class="n">x_0</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
-</code></pre></div></div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">x_0_tilde</span> <span class="o">=</span> <span class="n">result</span><span class="p">[</span><span class="s">'adversarial_example'</span><span class="p">]</span>
-<span class="n">x_0_tilde</span>
-</code></pre></div></div>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([-4.7920852 , -4.79208515,  6.20791488,  7.20791487, -4.79208522,
-       -4.7920852 , -4.79208489, -4.79208523, -4.7920851 , -2.7920851 ,
-       11.20791484, 11.20791476, 11.20791512,  8.20791481, -4.7920852 ,
-       -4.7920852 , -4.79208524,  7.79208396, 11.20791481,  7.20791497,
-        5.20791511, 18.79208499, -4.79208522,  4.79208101, -4.79208524,
-       -3.79208507, 11.20791491, -3.79208524,  7.20791478, 10.20791479,
-       -4.79208514, -4.79208524, -4.79208521, -4.7920852 ,  8.20791491,
-       11.20791479,  4.20791478, 10.20791481, -2.79208521, -4.79208522,
-       -4.79208523, -4.79208524, -4.79208517, -1.79208524, -4.79208515,
-       13.79208457,  6.20791476,  4.72495082, -4.79208523, -4.7920852 ,
-       -4.79208521, -4.79208521,  4.20791477, 10.20791478, -0.79208514,
-       -4.79207914, -4.79208505, -4.79208409,  6.51396684,  7.20791475,
-        8.20791476, -1.7920852 , -4.7920852 , -4.79208521])
-</code></pre></div></div>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">plt</span><span class="p">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">x_0_tilde</span><span class="p">,</span> <span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">order</span><span class="o">=</span><span class="s">'C'</span><span class="p">),</span> <span class="n">cmap</span><span class="o">=</span><span class="s">'gray'</span><span class="p">)</span>
-</code></pre></div></div>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>&lt;matplotlib.image.AxesImage at 0x7f8cc7b5cd90&gt;
-</code></pre></div></div>
-
-<p><img src="../assets/files/images/verifiNN_demo_19_1.png" alt="png" /></p>
-
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">network</span><span class="p">.</span><span class="n">classify</span><span class="p">(</span><span class="n">x_0_tilde</span><span class="p">)</span>
-</code></pre></div></div>
-
-<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>0
-</code></pre></div></div>
-
-<p>To a human observer, it is (hopefully) clear that the above image is a <code class="language-plaintext highlighter-rouge">9</code> and not a <code class="language-plaintext highlighter-rouge">0</code>. <strong>To the network, however, this looks like a <code class="language-plaintext highlighter-rouge">0</code></strong>. Thus, we have located an adversarial example <code class="language-plaintext highlighter-rouge">x_0_tilde</code> that differs “very slightly” from the reference example <code class="language-plaintext highlighter-rouge">x_0</code>, but the slight difference is enough for the network to misclassify it (as a <code class="language-plaintext highlighter-rouge">0</code>).</p>
-
-<p>Now, some obvious call outs:</p>
-<ul>
-  <li>Our network was a very small, random network. Fooling such a network is relatively easy.</li>
-  <li>The “slight difference” between <code class="language-plaintext highlighter-rouge">x_0</code> and <code class="language-plaintext highlighter-rouge">x_0_tilde</code> is not so slight. In fact <code class="language-plaintext highlighter-rouge">x_0_tilde</code> is at a distance of approx. 4.792 from <code class="language-plaintext highlighter-rouge">x_0</code>.</li>
-  <li>Radius of search \(\epsilon = 5\) is pretty large. The closer the adversarial example is to an actual training example, the harder it will be to detect by sight.</li>
-</ul>
-
-<p>Despite the above shortcomings, the above example serves the purpose of providing concrete intuition about why robustness of neural networks is important. In the subsequent sections, we will make the notion of robustness more precise. We will then explore how we can verify the robustness of a <em>trained</em> neural network using a very popular idea from mathematical optimization, viz. <em>Linear Programming</em>.</p>
-
-<h1 id="problem-setup">Problem setup</h1>
-
-<p>Suppose we are given a fully connected, feed forward <em>K-class classifier</em> neural network that was trained using the ReLU activation function. Note that the weights and biases of this network are fixed. Suppose the network accepts real vectors of length \(n\) as inputs and let \(F: \mathbb{R}^n \longrightarrow \{1, 2, ..., K\}\) represent the network classification function. Then we can write \(F\) as a composition of a <em>network output function</em> and a <em>labeling function</em> as described below.</p>
-
-<p>Let \(W_i\) and \(b_i\) represent the weight matrix and the bias vector of the \(i\)th layer respectively. Then we can write the output of the \(i\)th layer recursively as follows:</p>
-
-\[\begin{equation} \tag{1}
-    z_{i} = \phi(W_{i} z_{i-1} + b_{i}) = \phi \circ \omega_i(z_{i - 1})
-\end{equation}\]
-
-<p>where \(\omega_i\) represents the affine transformation corresponding to the \(i\)th layer and \(\phi\) represents the “vectorized” version of the activation function, i.e. \(\phi(x_1, ..., x_n) = (\phi(x_1), ..., \phi(x_n))\). The network output function \(f_W: \mathbb{R}^n \longrightarrow \mathbb{R}^K\) is defined as:</p>
-
-\[\begin{equation}\tag{2}
-    f_W(x) = \phi \circ \omega_{H+1} \circ \dots \circ \phi \circ \omega_1(x)
-\end{equation}\]
-
-<p>where \(H\) is the number of hidden layers in the network. The labeling function \(\pi: \mathbb{R}^K \longrightarrow \{1, 2, ..., K\}\) is defined as:</p>
-
-\[\begin{equation}\tag{3}
-\pi(y) = \underset{i = 1, ... , K}{\text{arg max}}\ y_i
-\end{equation}\]
-
-<p>where \(K\) is the number of classes. For a given input \(x_0\), we have:</p>
-
-\[\begin{equation}\tag{4}
-    F(x_0) = \pi(f_W(x_0)) = l_0
-\end{equation}\]
-
-<p>with \(l_0\) is the class label assigned to \(x_0\) by the network. It is worth noting that we can use a different labeling function here, e.g. <em>softmax</em>, without affecting our analysis as long as the labeling function of choice is non-decreasing.</p>
-
-<p><img src="../assets/files/images/pi_fw.png" width="350" length="350" align="center" /></p>
-
-<h2 id="polyhedron-induced-by-a-class-label">Polyhedron induced by a class label</h2>
-
-<p>Suppose our classifier network has \(K\) class labels. The co-domain \(\mathbb{R}^K\) of the output function can be partitioned into \(K\) polyhedra. Consider the half-space \(\mathcal{H}_{l &gt; i}\) of all the points in \(\mathbb{R}^K\) where the \(l\)th component is greater than the \(i\)th component.</p>
-
-\[\begin{equation}\tag{5}
-    \mathcal{H}_{l &gt; i} := \{y \in \mathbb{R}^K : y_l &gt; y_i\}
-\end{equation}\]
-
-<p>Suppose we fix \(l\) and take the intersection of all half-spaces \(\mathcal{H}_{l &gt; i}\), \(i \ne l\). We get the set \(S_l\) of points where the \(l\)th component is greater than every other component. (For simplicity, we assume that there are no ties among the components of \(y\), i.e. \(i \ne j \implies y_i \ne y_j\).)</p>
-
-\[\begin{equation}\tag{6}
-    S_l := \bigcap_{i \ne l} \mathcal{H}_{l &gt; i} = \{y \in \mathbb{R}^K: y_l &gt; y_i, i \ne l\}
-\end{equation}\]
-
-<p>Note that:</p>
-<ul>
-  <li>\(S_l\) is an intersection of half-spaces and is therefore a polyhedron.</li>
-  <li>\(S_i \bigcap S_j = \emptyset\) for \(i \ne j\).</li>
-  <li>\(\{S_1, ..., S_K\}\) forms a partition of \(\mathbb{R}^K\).</li>
-</ul>
-
-<p><strong>Definition</strong> <strong><em>[Polyhedron induced by a class label].</em></strong> <em>Suppose we are given a K-class classifier network and a class label \(l \in \{1, 2, ..., K\}\). Then we say that the set</em></p>
-
-\[S_{l} = \{y \in \mathbb{R}^K: y_{l} &gt; y_i, i \ne l\}\]
-
-<p><em>is the polyhedron induced by the class label \(l\).</em></p>
-
-<p><strong>Remark.</strong> The output function maps an input to the corresponding induced polyhedron. Let \(x_0 \in \mathbb{R}^n\) be an input to a classifier network with classification function \(F\) and output function \(f_W\). Then,</p>
-
-\[\begin{equation*}
-     F(x_0) = l_0 \iff f_W(x_0) \subset S_{l_0}
-\end{equation*}\]
-
-<p>In other words, the network assigns the class label \(l_0\) to the input \(x_0\) if and only if \(f_W(x_0)\) lies inside the polyhedron induced by \(l_0\).</p>
-
-<p><img src="../assets/files/images/pi_maps_Si_to_i.png" width="500" length="500" align="center" /></p>
-
-<h2 id="formalizing-robustness-for-classifier-networks">Formalizing robustness for classifier networks</h2>
-<p>Recall that we say a classifier network is robust if small perturbations to an input do not affect its classification. Let us define a set that contains all “small” perturbations of the reference input \(x_0\). We will call this set the <em>region of interest</em>. For our purposes, we will choose this set to be the \(\epsilon\)-ball around the refence input \(x_0\).</p>
-
-<p><strong>Definition</strong> <strong><em>[Region of inerest around an input].</em></strong> <em>Let \(x_0 \in \mathbb{R}^n\) be a reference input. Then the set</em></p>
-
-\[\mathcal{B}_{\infty}(x_0, \epsilon) = \{x: \parallel x - x_0 \parallel_{\infty} \le \epsilon \}\]
-
-<p><em>is called the region of interest around \(x_0\).</em></p>
-
-<p><strong>Definition</strong> <strong><em>[Safety set induced by an input].</em></strong> <em>Suppose the network assigns the class label \(l_0\) to a reference input \(x_0\). Then the set \(S_{l_0}\) is called the safety set induced by \(x_0\).</em></p>
-
-<p>For our network to be robust, it must assign the same class to all points in \(\mathcal{B}_{\infty}(x_0, \epsilon)\) i.e. \(F(x) = F(x_0) = l_0\) for all \(x \in \mathcal{B}_{\infty}(x_0, \epsilon)\). This is equivalent to saying \(f_W(x) \in S_{l_0}\) for all \(x \in \mathcal{B}_{\infty}(x_0, \epsilon)\). In other words, we want the image of the region of interest to lie inside the safety set induced by \(x_0\). The verification problem then reduces to asking the below set membership question:</p>
-
-\[\begin{equation*}
-    f_W(\mathcal{B}_{\infty}(x_0, \epsilon)) \stackrel{?}{\subset} S_{l_0}
-\end{equation*}\]
-
-<p>We are now ready to give a formal definition of robustness.</p>
-
-<p><strong>Definition</strong> <strong><em>[\(\epsilon\)-robustness].</em></strong> <em>We say that a neural network is \(\epsilon\)-robust at \(x_0\) if and only if</em></p>
-
-\[\begin{equation*}
-    f_W(\mathcal{B}_\infty (x_0, \epsilon)) \subset S_{l_0}
-\end{equation*}\]
-
-<p><strong>Definition</strong> <strong><em>[Adversarial example].</em></strong> <em>A point \(\tilde{x} \in \mathbb{R}^n\) is said to be an adversarial example if</em></p>
-
-\[\begin{equation*}
-    \tilde{x} \in \mathcal{B}_\infty (x_0, \epsilon),\ \ f_W(\tilde{x}) \notin S_{l_0}
-\end{equation*}\]
-
-<p>The two-class classifier network shown in the figure below is not \(\epsilon\)-robust at \(x_0\) since \(\tilde{x}\) is an adversarial example.</p>
-
-<p><img src="../assets/files/images/adversarial_example.png" width="500" length="500" align="center" /></p>
-
-<p>It is worth noting that a network is \(\epsilon\)-robust if and only if an adversarial example does not exist.</p>
-
-<h1 id="verification-as-an-optimization-problem">Verification as an optimization problem</h1>
-<p>Recall that, given a trained \(H\)-hidden-layer neural network with the output function \(f_W\), a reference input point \(x_0\) and a positive \(\epsilon\), we want to answer the following question:</p>
-
-<p>Does the image of the region of inteterest lie inside the safety set?</p>
-
-\[\begin{equation*}
-    f_W(\mathcal{B}_\infty(x_0, \epsilon)) \stackrel{?}{\subset} S_{l_0}
-\end{equation*}\]
-
-<p>Or, equivalently, does there exist an adversarial example?</p>
-
-\[\begin{equation*}
-    \stackrel{?}{\exists} \tilde{x} \in \mathcal{B}_\infty(x_0, \epsilon)\ s.\ t.\ f_W(\tilde{x}) \notin S_{l_0}
-\end{equation*}\]
-
-<p>which is the same as solving the following satisfiability problem in optimization</p>
-
-\[\begin{gather}\tag{7}
-    \text{Find}\ z_0\\
-    \text{s.t.}\ z_0 \in \mathcal{B}_\infty(x_0, \epsilon)\\
-    z_{H + 1} = f_W(z_0)\\
-    z_{H+1} \notin S_{l_0}
-\end{gather}\]
-
-<p>where \(z_0 \in \mathbb{R}^n\) and \(z_{H+1} \in \mathbb{R}^K\) are the decision variables. Now, let \(\tilde{z_i}\) and \(z_i\) denote the denote the pre- and post-activation output of the \(i\)th layer of the network. In other words</p>
-
-\[\begin{equation}\tag{eq_z_i_z_i_hat}
-    \begin{split}
-        \tilde{z_i} &amp;= W_i z_{i -1} + b_i ,\qquad i = 1, ..., H + 1\\
-        z_i &amp;= ReLU(\tilde{z_i}), \qquad i = 1, ..., H + 1
-    \end{split}
-\end{equation}\]
-
-<p>Then we can replace the constraint \(z_{H+1} = f_W(z_0)\) in (7) with the equations (eq_z_i_z_i_hat). This gives us the following equivalent form of the satisfiability problem</p>
-
-\[\begin{gather}
-\text{Find}\ z_0\\
-\text{s.t.}\ z_0 \in \mathcal{B}_\infty(x_0, \epsilon) \tag{8}\\
-\tilde{z_i} = W_i z_{i -1} + b_i \quad i = 1, ..., H + 1 \tag{9}\\
-    z_i = ReLU(\tilde{z_i})  \quad i = 1, ..., H + 1 \tag{10}\\
-    z_{H+1} \notin S_{l_0} \tag{11}
-\end{gather}\]
-
-<p>where \(z_0, \tilde{z_1}, z_1, \tilde{z_2}, z_2, ..., \tilde{z}_{H+1}, z_{H+1}\) are the decision variables. We will refer to (8) as the <em>region of interest constraint</em>, (9) as the <em>affine constraint</em>, (10) as the <em>ReLU constraint</em>, and (11) as the <em>safety set constraint</em>. We will sometimes refer to (9) and (10) together as the <em>network constraint</em> and write it as \(z_{H+1} = f_W(z_0)\).</p>
-
-<p>Note that if the above optimization problem is feasible then our network is not robust. Conversely, if the problem is infeasible then our network is robust. Also note that the above problem is not a convex optimization problem. This is because, the ReLU and safety set constraints are not convex. This non-convexity of constraints makes it hard to solve the above optimization problem in its current form. Next, we will replace these non-convex constraints with their convex formulations / approximations.</p>
-
-<h2 id="convexifying-the-relu-constraint">Convexifying the ReLU constraint.</h2>
-
-<p>Note that \(f_W\) is not a convex function. However, we know that \(f_W\) is <em>piece-wise affine</em>. Suppose we can find a convex set \(\chi' \subset \mathbb{R}^n\), such that \(f_W\) is affine on \(\chi'\). Then, we can replace the network constraint constraint \(z_{H+1} = f_W(z_0)\) with the following convex approximation:</p>
-
-\[\begin{equation}\tag{12}
-    z_{H+1} = f_W|_{\chi'}(z_0) 
-\end{equation}\]
-
-<p>where \(f_W\mid_{\chi'}\) is the restriction of \(f_W\) to \(\chi'\). But how do we even begin to look for such a \(\chi'\)? As a starting point, it is helpful to note that we want \(\chi' \bigcap \mathcal{B}_\infty(x_0, \epsilon)\) to be non-empty. This is to ensure that (12) above does not conflict with (8). Said differently, we want \(\chi'\) to contain \(x_0\) as well as points that are “close” to \(x_0\). We will use this idea to find the desired \(\chi'\).</p>
-
-<p>Observe that as our reference input \(x_0\) propagates through the network, it causes some neurons to be “activated” in each layer while others remain inactive. For a given input this activation pattern is fixed. Now, the main idea is that <em>points that are close to \(x_0\) are likely to produce the same activation pattern as \(x_0\)</em>. So, it might be useful to look for a set that contains all inputs that produce the same activation pattern as \(x_0\). Using the notation introduced in (eq_z_i_z_i_hat), the pre- and post-activation outputs of the \(i\)th layer produced by our reference input \(x_0\) are</p>
-
-\[\begin{equation*}
-    \begin{split}
-        \tilde{x}_i &amp;= W_i {x}_{i-1} + b_i ,\qquad i = 1, ..., H + 1\\
-        {x}_i &amp;= ReLU(\tilde{x}_i) ,\qquad i = 1, ..., H + 1\\
-    \end{split}
-\end{equation*}\]
-
-<p>We say that the \(j\)th neuron in the \(i\)th layer is <em>activated</em> by the reference input \(x_0\) if the \(j\)th component of \(x_i\) is positive, i.e. \((x_i)_j &gt; 0\). The activation status of the \(j\)th neuron in the \(i\)th layer can be described by a binary constant</p>
-
-\[\begin{equation*}
-    \delta_{i,j} =
-    \begin{cases}
-        1 \quad\text{if}\ (\tilde{x}_i)_j &gt; 0\\
-        0 \quad\text{if}\ (\tilde{x}_i)_j \le 0
-    \end{cases}
-\end{equation*}\]
-
-<p>The activation pattern of the \(i\)th layer can then be expressed succinctly by the following diagonal matrix</p>
-
-\[\begin{equation*}
-    \Delta_i :=
-    \begin{pmatrix}
-        \delta_{i,1} &amp; 0 &amp; 0 &amp; 0 &amp; 0\\
-        0 &amp; \delta_{i,2} &amp; 0 &amp; 0 &amp; 0\\
-        \vdots &amp; \vdots &amp; \vdots &amp; \vdots &amp; \vdots\\
-        0 &amp; 0 &amp; 0 &amp; 0 &amp; \delta_{i,d_i}\\
-    \end{pmatrix} 
-\end{equation*}\]
-
-<p>where \(d_i\) is the number of neurons in the \(i\)th layer. Note that the linear operator \(\Delta_i: \mathbb{R}^{d_i} \longrightarrow \mathbb{R}^{d_i}\) is nothing but a projection map. Now, recall the definition of the network output function \(f_W\) given in (2) where \(\phi\) is chosen to be \(ReLU\). Suppose we were to replace the composition \(\phi \circ \omega_i\) with the composition \(\Delta_i \circ \omega_i\) in (2). The resulting output function, \(f_{W_0}\), is given by</p>
-
-\[\begin{equation*}\tag{13}
-    f_{W_0} = \Delta_{H+1} \circ \omega_{H+1} \circ \dots \circ \Delta_1 \circ \omega_1
-\end{equation*}\]
-
-<p>We make some important observations about \(f_{W_0}\).</p>
-
-<ul>
-  <li>\(f_{W_0}\) is an affine function</li>
-  <li>\(f_{W_0}(z) = f_W(z)\) for every \(z\) that produces the same activation pattern as \(x_0\).</li>
-</ul>
-
-<p>The first point follows from the fact that \(f_{W_0}\) is a composition of affine functions. The second point follows from the fact that, in computing the network output, \(f_{W_0}\) only considers neurons that were activated by the reference input \(x_0\) and ignores all other neurons (do you see why?). From the above observations, it seems that a good candidate for \(\chi'\) may be:</p>
-
-\[\begin{equation*}
-\begin{split}
-     \chi' &amp;= \{z \in \mathbb{R}^n : z\ \text{produces the same activation pattern as } x_0 \}\\
-     &amp;= \{z \in \mathbb{R}^n: f_W(z) = f_{W_0}(z)\}
-\end{split}
-\end{equation*}\]
-
-<p>So, finding \(\chi'\) simply reduces to solving the equation \(f_W(z) = f_{W_0}(z)\), i.e.</p>
-
-\[\begin{equation*}
-    \phi \circ \omega_{H+1} \circ \dots \circ \phi \circ \omega_1(z) = \Delta_{H+1} \circ \omega_{H+1} \circ \dots \circ \Delta_1 \circ \omega_1(z)
-\end{equation*}\]
-
-<p>which can be written as</p>
-
-\[\begin{equation*}
-    \phi \circ \omega_i (z_{i-1}) = \Delta_i \circ \omega_i (z_{i - 1})\ ,\ i = 1, ..., H+1
-\end{equation*}\]
-
-<p>which is equivalent to solving for \(z_0, z_1, ..., z_{H+1}\) in</p>
-
-\[\begin{equation}\tag{14}
-    ReLU(W_i z_{i-1} + b_i) = \Delta_i (W_i z_{i-1} + b_i)\ ,\ i = 1, ..., H+1
-\end{equation}\]
-
-<p>Solving (14) directly is hard. Fortunately, (14) has the below equivalent affine formulation.</p>
-
-\[\begin{equation}\tag{15}
- (2 \Delta_i - I)(W_i z_{i -1} + b_i) \ge 0\ ,\ i = 1, ..., H+1
-\end{equation}\]
-
-<p>It can be shown that every \(z_0, z_1, ..., z_{H+1}\) that is a solution to (14) is also a solution to (15) and vice-versa. Substituting \(\tilde{z}_i = W_i z_{i -1} + b_i\) in (15), we can approximate the ReLU constraint (10) by the following <em>convex</em> constraints</p>
-
-\[\begin{equation*}\tag{eq_convexified_relu}
-\begin{split}
-    (2 \Delta_i - I)\tilde{z}_i &amp;\ge 0 \\
-    z_i = \Delta_i &amp;\tilde{z}_{i}
-\end{split}
-\end{equation*}\]
-
-<h2 id="convexifying-the-safety-set-constraint">Convexifying the safety set constraint</h2>
-
-<p>Note that the safety set constraint (11) imples that if a feasible solution to our satisfiability problem exists then it must lie outside \(S_{l_0}\), i.e. it must lie inside \(\mathbb{R}^K \backslash S_{l_0}\). Recall that \(S_{l_0}\) is the polyhedron induced by the class label \(l_0\). In other words, \(S_{l_0}\) is the set of points where the largest component is at index \(l_0\). Therefore, \(\mathbb{R}^K \backslash S_{l_0}\) is the set of points where the largest component is at some index \(l' \ne l_0\).</p>
-
-<p>Instead of looking everywhere inside \(\mathbb{R}^K \backslash S_{l_0}\) (which is a non-convex set), we start by looking in the region where the component at index \(l'\) is greater than the component at index \(l_0\). This set is simply the half space \(\mathcal{H}_{l_0 &lt; l'}\). We can now replace (11}) with the below convex constraint:</p>
-
-\[\begin{equation*}
-    z_{H+1} \in \mathcal{H}_{l_0 &lt; l'}
-\end{equation*}\]
-
-<p>Repeating the above process for each \(l' \ne l_0\) gives us \(K-1\) convex problems that can be solved easily one at a time.</p>
-
-<h1 id="putting-it-all-together">Putting it all together</h1>
-<p>We now write down our original (non-convex) satisfiability problem</p>
-
-\[\begin{gather*}
-    \text{Find}\ z_0\\
-    \text{s.t.}\ z_0 \in \mathcal{B}_\infty(x_0, \epsilon)\\
-    \tilde{z_i} = W_i z_{i -1} + b_i \qquad &amp;i = 1, ..., H + 1 \\ \tag{Non-Conv}
-        z_i = ReLU(\tilde{z_i})  \qquad &amp;i = 1, ..., H + 1 \\
-        z_{H+1} \notin S_{l_0}
-\end{gather*}\]
-
-<p>and its convex modification</p>
-
-\[\begin{gather*}
-    \text{Find}\ z_0\\
-    \text{s.t.}\ z_0 \in \mathcal{B}_\infty(x_0, \epsilon)\\
-    \tilde{z_i} = W_i z_{i -1} + b_i \qquad &amp;i = 1, ..., H + 1 \\ \tag{Conv}
-        (2 \Delta_i - I)\tilde{z}_i \ge 0 \qquad &amp;i = 1, ..., H + 1\\
-        z_i = \Delta_i \tilde{z}_i  \qquad &amp;i = 1, ..., H + 1 \\
-        z_{H+1} \in \mathcal{H}_{l_0 &lt; l'}
-\end{gather*}\]
-
-<p>where (Conv) must be solved \(K -1\) times with varying \(l'\). Note that (Conv) is a convex (in fact affine) problem and can be easily solved with the help of any Linear Programming solver.</p>
-
-<h1 id="conclusion">Conclusion</h1>
-<p>In this post we defined the notion of robustness of a neural network and formulated the verificaion of robustness as an optimization problem. We then proposed a convex, LP approximation of this problem which can be solved easily with any linear programming solver.</p>
-
-<p>It should be noted that the above robustness verification approach of solving a convex approximation of the original problem, is not complete. In other words, the feasibility of the  approximation (Conv) certifies <em>non-robustness</em>. However, infeasibility of (Conv) does <em>not</em> certify <em>robustness</em>. Even so, this approach can be used to quickly determine if a network is certifiably non-robust at a given point by locating an adversarial example.</p>
-
-<h1 id="references">References</h1>
-
-<p>[1] Michael Andrew Roark. <em>Formal Verification of Neural Networks via Optimization Methods.</em> Masters Thesis (2022). Department of Mathematics, San Francisco State University. URL: https://doi.org/10.46569/20.500.12680/4t64gv41s</p>
-
-<p>[2] Changliu Liu, et al. <em>Algorithms for Verifying Deep Neural Networks.</em> (2020) URL: https://arxiv.org/abs/1903.06758</p>
-
-<p>[3] Mahyar Fazlyab, et al. <em>Safety Verification and Robustness Analysis of Neural Networks via Quadratic Constraints and Semidefinite Programming.</em> (2021) URL: 
-https://doi.org/10.48550/arXiv.1903.01287</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[Robustness is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.]]></summary></entry></feed>
+<p>https://github.com/ayusbhar2/optimization/blob/main/applications/network_optimization/network_optimization.ipynb</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[[Source: Frederick S. Hillier and Gerald J. Lieberman. Introduction to Operations Research - 7th ed., 2000, McGraw-Hill, ISBN 0-07-232169-5] A rebel army is attempting to overthrow the elected government of the Russian Federation. The United States government has decided to assist its ally by quickly sending troops and supplies to the Federation. A plan needs to be developed for shipping the troops and supplies most effectively. Depending on the overall measure of performance, the analysis requires formulating and solving a shortest-path problem, a minimum cost flow problem, or a maximum flow problem.]]></summary></entry></feed>

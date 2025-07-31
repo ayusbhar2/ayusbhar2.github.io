@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<title>Hessian analysis with JAX: a platform-agnostic approach | Mathematics of Machine Learning and Optimization</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="author" content="Ayush Bharadwaj">
+<meta name="generator" content="Jekyll v4.2.2">
+<link rel="canonical" href="http://localhost:4000/hessian-analysis-with-jax/">
+
+<link rel="stylesheet" href="/assets/css/frame.css">
+
+<link rel="alternate" href="/feed.xml" type="application/atom+xml" title="Mathematics of Machine Learning and Optimization">
+
+
+<link rel="stylesheet" href="/assets/katex/katex.min.css">
+<script defer src="/assets/katex/katex.min.js"></script>
+<script defer src="/assets/katex/contrib/auto-render.min.js" onload="renderMathInElement(document.body)"></script>
+<script src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML" type="text/javascript"></script>
+
+
+
+
+<link rel="stylesheet" href="/assets/css/sidebar.css" media="screen and (min-width: 70em)">
+<aside style="display: none">
+  <nav><a aria-label="Home" href="/" >
+      <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#"></use></svg>
+      <span aria-hidden="true">Home</span>
+    </a><a aria-label="About" href="/about" >
+      <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#"></use></svg>
+      <span aria-hidden="true">About</span>
+    </a><a aria-label="Projects" href="/projects" >
+      <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#"></use></svg>
+      <span aria-hidden="true">Projects</span>
+    </a><a aria-label="Resume" href="/assets/files/ayush_resume_v14_AI.pdf" >
+      <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#"></use></svg>
+      <span aria-hidden="true">Resume</span>
+    </a><a aria-label="Mail" href="mailto:ayush.bharadwaj@gmail.com" >
+      <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#envelope"></use></svg>
+      <span aria-hidden="true">Mail</span>
+    </a><a aria-label="Github" href="https://github.com/ayusbhar2" >
+      <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#github"></use></svg>
+      <span aria-hidden="true">Github</span>
+    </a><a aria-label="LinkedIn" href="https://www.linkedin.com/in/ayushbharadwaj/" >
+      <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#linkedin"></use></svg>
+      <span aria-hidden="true">LinkedIn</span>
+    </a></nav>
+  <div class="description">Mathematics of Machine Learning and Optimization</div>
+</aside>
+
+
+
+
+<header>
+  <a href="/" class="title">Mathematics of Machine Learning and Optimization</a>
+  <nav><a href="/" >Home</a><a href="/about" >About</a><a href="/projects" >Projects</a><a href="/assets/files/ayush_resume_v14_AI.pdf" >Resume</a></nav>
+
+</header>
+
+<article>
+  <header>
+  <h1><a href="/hessian-analysis-with-jax/">Hessian analysis with JAX: a platform-agnostic approach</a></h1><time datetime="2025-07-31T00:00:00-07:00">July 31, 2025</time>
+</header>
+
+  <p>In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.</p>
+
+<p>The goal of this post is to present a simple, <a href="https://docs.jax.dev/en/latest/index.html">JAX</a>-based framework to address the above difficulty. This framework will help us:</p>
+
+<ol>
+  <li>make the core numerical code platform-independent, allowing it to be optimized separately and used across models/platforms.</li>
+  <li>formalize the changes needed to peripheral code when switching platforms, minimizing the possibility of errors.</li>
+  <li>disentangle model training from Hessian analysis, facilitating the analysis of pre-trained models.</li>
+</ol>
+
+<p>(In my current SPAR project, we have used the above framework quite successfully.)</p>
+
+<p>NOTE: For analyzing a model, it is not necessary to train it ourselves as long as we have access to certain defining attributes of the model (details in post).</p>
+
+<p>NOTE: There are several reasons for choosing JAX for this task - performance, flexibility, math-like flavor, numpy-like interface, and the powerful <a href="https://docs.jax.dev/en/latest/pytrees.html">Pytree</a> abstraction for parameter handling (more on each of these in a future post).</p>
+
+<p>NOTE: Even if you don’t anticipate working across multiple platforms, you may still want to consider this framework for the above reasons.</p>
+
+<p>NOTE: This post assumes the reader is familiar with <code class="language-plaintext highlighter-rouge">scipy.sparse.linalg.eigsh</code> and how it can be used to compute the Hessian eigenspectrum via Hessian-vector products. (As a refresher, I recommend reading this <a href="https://www.lesswrong.com/posts/mwBaS2qE9RNNfqYBC/recipe-hessian-eigenvector-computation-for-pytorch-models">post</a> upto, but excluding, the implementation which is very Pytorch specific.)</p>
+
+<p>NOTE: The code presented here is written for simplicity and clarity, not for compute or memory efficiency. I will try to point out obvious optimizations where possible.</p>
+
+<p>NOTE: The code presented here runs on a single CPU/GPU/TPU. While JAX provides excellent primitives for distributed computations, these are out of scope for this post.</p>
+
+<h1 id="a-two-part-framework">A two-part framework</h1>
+
+<p>The proposed framework has two parts:</p>
+
+<ul>
+  <li>a <strong>core module</strong> that contains the numerical code to compute the hessian eigenspectrum</li>
+  <li>a set of <strong>mediating objects</strong> that implement a standard interface for the core module (to interact with different platforms).</li>
+</ul>
+
+<p>In essence, the mediating objects are a platform-independent representations of the four defining attributes of a model:</p>
+
+<ol>
+  <li>model parameters</li>
+  <li>training data</li>
+  <li>output function</li>
+  <li>loss function</li>
+</ol>
+
+<p>For each new model we want to analyze, we first generate the mediating objects and then pass them on to the (platform-agnostic) core module for eigenspectrum computation.</p>
+
+<p>A key observation behind this framework is that numerical code (e.g. computing the eigenspectum) requires careful memory / compute optimizations and precision handling. As a result, such code should be independent of, and shared across all models/platforms. In particular, this code should not require changes when switching models/platforms. And, while some code changes are inevitable, these changes should be few and limited to parts that are easier to implement and test.</p>
+
+<h1 id="a-pytorch-example">A Pytorch Example</h1>
+
+<p>Let’s start by looking at a concrete example. Suppose we want to compute the eigenspectrum of a toy Pytorch MLP model. For this example, we will train the model ourselves.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="n">nn</span>
+<span class="kn">import</span> <span class="nn">torch.optim</span> <span class="k">as</span> <span class="n">optim</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="c1"># Dataset
+</span><span class="n">X_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">]])</span>   <span class="c1"># shape (2, 2)
+</span><span class="n">Y_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">5.</span><span class="p">,</span> <span class="mf">6.</span><span class="p">])</span>              <span class="c1"># shape (2,)
+</span>
+<span class="c1"># Convert to PyTorch tensors
+</span><span class="n">X</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">X_np</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>            <span class="c1"># (2, 2)
+</span><span class="n">Y</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">Y_np</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">).</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># (2, 1)
+</span>
+<span class="c1"># Define MLP with identity activations
+</span><span class="k">class</span> <span class="nc">IdentityMLP</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">fc1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>  <span class="c1"># Hidden: 2x2
+</span>        <span class="bp">self</span><span class="p">.</span><span class="n">fc2</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>  <span class="c1"># Output: 2x1
+</span>
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fc1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Identity activation (no-op)
+</span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Identity activation (no-op)
+</span>        <span class="k">return</span> <span class="n">x</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Initialize model, loss, and optimizer
+</span><span class="n">torch</span><span class="p">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">IdentityMLP</span><span class="p">()</span>
+<span class="n">criterion</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">MSELoss</span><span class="p">()</span>
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="p">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Training loop (2 epochs, full batch)
+</span><span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">10</span><span class="p">):</span>
+    <span class="n">optimizer</span><span class="p">.</span><span class="n">zero_grad</span><span class="p">()</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>       <span class="c1"># Forward pass
+</span>    <span class="n">loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>  <span class="c1"># Compute loss
+</span>    <span class="n">loss</span><span class="p">.</span><span class="n">backward</span><span class="p">()</span>         <span class="c1"># Backpropagation
+</span>    <span class="n">optimizer</span><span class="p">.</span><span class="n">step</span><span class="p">()</span>        <span class="c1"># Gradient update
+</span>    <span class="k">print</span><span class="p">(</span><span class="sa">f</span><span class="s">"Epoch </span><span class="si">{</span><span class="n">epoch</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s">, Loss: </span><span class="si">{</span><span class="n">loss</span><span class="p">.</span><span class="n">item</span><span class="p">()</span><span class="si">:</span><span class="p">.</span><span class="mi">4</span><span class="n">f</span><span class="si">}</span><span class="s">"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Epoch 1, Loss: 50.2097
+Epoch 2, Loss: 31.4481
+Epoch 3, Loss: 26.3921
+Epoch 4, Loss: 22.0585
+Epoch 5, Loss: 16.8630
+Epoch 6, Loss: 10.8475
+Epoch 7, Loss: 5.5302
+Epoch 8, Loss: 2.6469
+Epoch 9, Loss: 1.8508
+Epoch 10, Loss: 1.7286
+</code></pre></div></div>
+
+<p>Since we have access to the model’s parameters, the training data, the output function and the loss function, we are ready to generate the mediating objects.</p>
+
+<h2 id="generating-mediating-objects">Generating mediating objects</h2>
+
+<h3 id="1-model-parameters-as-a-python-iterable">1. Model parameters (as a python iterable)</h3>
+
+<p>The first mediating object is a python iterable containing model parameters as pure-python scalars and/or numpy arrays. The idea is to represent model parameters in a way that is platform-independent and recognized by JAX, making parameter handling extremely easy. This iterable can have any structure with arbitrary levels of nested dicts, lists and tuples (technically, it just needs to be a valid JAX <a href="https://docs.jax.dev/en/latest/pytrees.html">Pytree</a>).</p>
+
+<p>The above iterable can be generated from an in-memory model or from an on-file json object. Either way, this can be done easily in just a few lines of (highly reusable) code. We do this below for our Pytorch model.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 1. Model params
+</span>
+<span class="k">def</span> <span class="nf">extract_pytorch_model_parameters</span><span class="p">(</span><span class="n">pytorch_model</span><span class="p">):</span>
+    <span class="n">param_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">pytorch_model</span><span class="p">.</span><span class="n">named_parameters</span><span class="p">():</span>
+        <span class="c1"># Detach, convert to list, round to 7 decimal places
+</span>        <span class="n">rounded</span> <span class="o">=</span> <span class="n">param</span><span class="p">.</span><span class="n">detach</span><span class="p">().</span><span class="n">cpu</span><span class="p">().</span><span class="n">numpy</span><span class="p">().</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="n">rounded</span> <span class="o">=</span> <span class="p">[[</span><span class="nb">round</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="nb">round</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
+                   <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rounded</span><span class="p">]</span>
+        <span class="n">param_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">rounded</span>
+    <span class="k">return</span> <span class="n">param_dict</span>
+
+<span class="n">params</span> <span class="o">=</span> <span class="n">extract_pytorch_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+
+<span class="k">print</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>{'fc1.weight': [[0.3645523, 0.9664639], [-0.5033512, -0.4280049]], 'fc1.bias': [-0.0550507, 0.2033689], 'fc2.weight': [[0.9411813, -0.4964321]], 'fc2.bias': [0.6310059]}
+</code></pre></div></div>
+
+<h3 id="2-training-set-as-jax-arrays">2. Training set (as jax arrays)</h3>
+
+<p>The second mediating object is the model’s training set in the form of jax arrays. Since different platforms offer different APIs for accessing datasets, this may require writing a function to generate JAX arrays from something like a Pytorch dataloader object (see <a href="https://docs.jax.dev/en/latest/notebooks/Neural_Network_and_Data_Loading.html#data-loading-with-pytorch">here</a> for an example). Again, this can be done in a few lines of (highly reusable) code. We do this below for our example model.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 2. Training data
+</span>
+<span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="n">jnp</span>
+
+<span class="k">def</span> <span class="nf">cast_pytorch_tensors_to_jax_arrays</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">):</span>
+    <span class="c1"># Convert Pytroch tensors to jax arrays
+</span>    <span class="n">X_jnp</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">X</span><span class="p">.</span><span class="n">cpu</span><span class="p">().</span><span class="n">detach</span><span class="p">().</span><span class="n">numpy</span><span class="p">())</span>
+    <span class="n">Y_jnp</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">Y</span><span class="p">.</span><span class="n">cpu</span><span class="p">().</span><span class="n">detach</span><span class="p">().</span><span class="n">numpy</span><span class="p">())</span>
+    <span class="k">return</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span>
+
+<span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span> <span class="o">=</span> <span class="n">cast_pytorch_tensors_to_jax_arrays</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+
+<span class="c1"># print(type(X_jnp))
+# print(type(Y_jnp))
+</span></code></pre></div></div>
+
+<h3 id="3-ouput-function-as-a-python-object">3. Ouput function (as a python object)</h3>
+
+<p>The third mediating object is a JAX version of the source model’s output function (which we need to write ourselves). This new function must accept the first two mediating objects (i.e. the model parameters and the training set) as inputs, and produce the same outputs as the original model. We will call this function <code class="language-plaintext highlighter-rouge">forward_copy_torch</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 3. Output function
+</span><span class="k">def</span> <span class="nf">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+    <span class="n">w1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc1.weight'</span><span class="p">])</span>
+    <span class="n">b1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc1.bias'</span><span class="p">])</span>
+    <span class="n">w2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc2.weight'</span><span class="p">])</span>
+    <span class="n">b2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc2.bias'</span><span class="p">])</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">b1</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
+    <span class="k">return</span> <span class="n">x</span> 
+
+<span class="c1"># Test that our output matches original model
+</span><span class="k">print</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)))</span>
+<span class="k">print</span><span class="p">(</span><span class="n">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">])))</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tensor([3.3154], grad_fn=&lt;ViewBackward0&gt;)
+[3.3154101]
+</code></pre></div></div>
+
+<p><strong>NOTE</strong>: The <code class="language-plaintext highlighter-rouge">forward_copy_torch</code> method takes as input a single training example and not a “batch” of training examples (since the idea of a batch is not relevant from a Hessian analysis perspective).</p>
+
+<p><strong>TIP</strong>: It is a good idea to verify the new function’s output against the original model’s output as a sanity check. If the outputs differ, our analysis will be meaningless.</p>
+
+<h3 id="4-loss-function-as-a-python-object">4. Loss function (as a python object)</h3>
+
+<p>The fourth and final mediating object is a JAX version of the source model’s loss function. Once again, we need to write this function ourselves. This new function must accept the first three mediating objects (i.e. parameters, training data, and output function) as inputs and produce the same training loss as the original model. But we have to be a bit more careful here.</p>
+
+<p>As we will see in the next section, the core module uses the <code class="language-plaintext highlighter-rouge">jax.jvp()</code> transformation along with the <code class="language-plaintext highlighter-rouge">eigsh</code> function to compute the Hessian eigenspectrum. In short, <code class="language-plaintext highlighter-rouge">jax.jvp()</code> facilitates the computation of Hessian-vector products via automatic differentiation, and <code class="language-plaintext highlighter-rouge">eigsh</code> utilizes these Hessian-vector products to compute the eigenspecturm. A close examination of the above two APIs will reveal two important facts:</p>
+
+<ul>
+  <li>For automatic differentiation to work, our loss function must be explicitly defined as a function of the parameters (i.e. we cannot use something generic like <code class="language-plaintext highlighter-rouge">torch.nn.MSE_loss()</code> which only takes outputs and targets as its  arguments).</li>
+  <li>For <code class="language-plaintext highlighter-rouge">eigsh</code> to work, our loss function must specifically accept a 1D array of parameters as its argument (and not an iterable or array of some other shape).</li>
+</ul>
+
+<p>We achieve the above conditions by using a function generator as shown below.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span> <span class="nn">jax.flatten_util</span> <span class="kn">import</span> <span class="n">ravel_pytree</span>
+
+<span class="k">def</span> <span class="nf">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">forward_copy</span><span class="p">):</span>
+    <span class="s">"""Returns a loss function object which accepts a 1D parameter array.
+
+    Args:
+    
+    """</span>
+
+    <span class="n">params_flat</span><span class="p">,</span> <span class="n">unravel_func</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+    
+    <span class="k">def</span> <span class="nf">_MSE_loss</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">params_flat</span><span class="p">):</span>
+        <span class="n">params</span> <span class="o">=</span> <span class="n">unravel_func</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">X</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
+            <span class="n">s</span> <span class="o">+=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">linalg</span><span class="p">.</span><span class="n">norm</span><span class="p">(</span><span class="n">forward_copy</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">-</span> <span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span>
+        <span class="k">return</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">m</span><span class="p">)</span> <span class="o">*</span> <span class="n">s</span>
+    <span class="k">return</span> <span class="n">partial</span><span class="p">(</span><span class="n">_MSE_loss</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Things to note:</p>
+
+<ul>
+  <li>
+    <p><strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.flatten_util.ravel_pytree.html#jax.flatten_util.ravel_pytree"><code class="language-plaintext highlighter-rouge">ravel_pytree</code></a></strong> implements out-of-the-box, deterministic flattening and unflatteining of arbitrary iterables. (A powerful tool that, incidentally, doesn’t have a counterpart in Pytorch). This is just one of many functionalities provided by JAX’s <a href="https://docs.jax.dev/en/latest/pytrees.html">Pytree</a> API which makes parameter handling in JAX truly generalizable across model types, architectures and specification formats.</p>
+  </li>
+  <li>
+    <p>We only need to write the <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code> function once. We can simply reuse it for analyzing any model that was trained using MSE loss.</p>
+  </li>
+</ul>
+
+<p><strong>TIP:</strong> The <code class="language-plaintext highlighter-rouge">_MSE_loss</code> function shown here uses a <code class="language-plaintext highlighter-rouge">for</code> loop for simplicity. A more effient alternative would be to pass a vectorized version of <code class="language-plaintext highlighter-rouge">forward_copy</code> to <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code> instead. This can be done using JAX’s <strong><a href="https://docs.jax.dev/en/latest/automatic-vectorization.html"><code class="language-plaintext highlighter-rouge">vmap()</code></a></strong> transformation.</p>
+
+<p><strong>CAUTION:</strong> <code class="language-plaintext highlighter-rouge">partial(_MSE_loss, X, Y)</code> bakes the training set (i.e. X, Y) into the function object returned by <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code>. This makes the signature of the resulting function much cleaner. But doing this may increase the memory footprint due to dataset replication. However, if you are not running out of memory, then you probably don’t need to worry about this.</p>
+
+<p>Next, we generate our fourth mediating object and call it <code class="language-plaintext highlighter-rouge">MSE_loss_copy</code>.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 4. Loss function
+</span><span class="n">MSE_loss_copy</span> <span class="o">=</span> <span class="n">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span><span class="p">,</span> <span class="n">forward_copy_torch</span><span class="p">)</span>
+
+
+<span class="c1"># Test that our loss matches the original model's loss
+</span><span class="n">params_flat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">MSE_loss_copy</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">criterion</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">Y</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tensor(1.6969, grad_fn=&lt;MseLossBackward0&gt;)
+1.6968625
+</code></pre></div></div>
+
+<h2 id="a-core-module-review">A core module review</h2>
+
+<p>Once we have generated our mediating objects, we need to pass them to the core module for eigenspectrum computation. But before we do that, let’s take a look at what the core module contains.</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">#! core.py
+</span><span class="kn">import</span> <span class="nn">jax.numpy</span> <span class="k">as</span> <span class="n">jnp</span>
+
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span> <span class="nn">jax</span> <span class="kn">import</span> <span class="n">grad</span><span class="p">,</span> <span class="n">jit</span><span class="p">,</span> <span class="n">jvp</span>
+<span class="kn">from</span> <span class="nn">jax.flatten_util</span> <span class="kn">import</span> <span class="n">ravel_pytree</span>
+<span class="kn">from</span> <span class="nn">scipy.sparse.linalg</span> <span class="kn">import</span> <span class="n">eigsh</span><span class="p">,</span> <span class="n">LinearOperator</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span>
+
+
+<span class="o">@</span><span class="n">dataclass</span>
+<span class="k">class</span> <span class="nc">EigshArgs</span><span class="p">:</span>
+    <span class="s">"""Helper class for managing the arguments to be passed to eigsh."""</span>
+    <span class="n">k</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">sigma</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">which</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s">'LM'</span>
+    <span class="n">v0</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">jnp</span><span class="p">.</span><span class="n">ndarray</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="n">tol</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.001</span>
+    <span class="n">return_eigenvectors</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="bp">True</span>
+
+
+<span class="k">class</span> <span class="nc">HessianAnalyzer</span><span class="p">:</span>
+    <span class="s">"""."""</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">forward</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">):</span>
+        <span class="s">"""."""</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">unravel_func</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">params</span><span class="p">)</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">X_train</span> <span class="o">=</span> <span class="n">X_train</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">Y_train</span> <span class="o">=</span> <span class="n">Y_train</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">forward</span> <span class="o">=</span> <span class="n">forward</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">loss</span> <span class="o">=</span> <span class="n">loss</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span>
+        
+    <span class="k">def</span> <span class="nf">_matvec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
+        <span class="c1"># Given a vector v, returns the hessian-vector product Hv.
+</span>        <span class="k">return</span> <span class="n">jvp</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">loss</span><span class="p">),</span> <span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">],</span> <span class="p">[</span><span class="n">v</span><span class="p">])[</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">_get_linear_operator</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">LinearOperator</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">),</span> <span class="n">matvec</span><span class="o">=</span><span class="bp">self</span><span class="p">.</span><span class="n">_matvec</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="p">.</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">get_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eish_args</span><span class="p">:</span> <span class="n">EigshArgs</span><span class="p">):</span>
+        <span class="s">"""Simple wrapper around `scipy.sparse.linalg.eigsh`."""</span>
+        <span class="n">linear_operator</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">_get_linear_operator</span><span class="p">()</span>
+        <span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">eigsh</span><span class="p">(</span><span class="n">linear_operator</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">eish_args</span><span class="p">.</span><span class="n">k</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">sigma</span><span class="p">,</span>
+                                 <span class="n">which</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">which</span><span class="p">,</span> <span class="n">v0</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">v0</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">tol</span><span class="p">,</span>
+                                 <span class="n">return_eigenvectors</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">return_eigenvectors</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span>
+</code></pre></div></div>
+
+<p>A few things to note:</p>
+
+<ol>
+  <li>The <code class="language-plaintext highlighter-rouge">HessianAnalyzer</code> class encapsulates the entire eigenspectrum computation functionality, and provides a simple interface for interacting with the core module.</li>
+  <li>
+    <p>The <code class="language-plaintext highlighter-rouge">_matvec</code> method implements the Hessian-vector product. Since this is an important computation, it warrants some attention. First we make a simple observation - the Hessian is nothing but the Jacobian of the gradient. So, for a point \(\theta\) and a direction vector \(v\) in parameter space, we have \(\begin{equation}H_{\theta}\cdot v = J_{\theta}(\nabla \mathcal{L}) \cdot v\end{equation}\). The right hand side of the above equation is precisely what <code class="language-plaintext highlighter-rouge">_matvec</code> returns. More specifically, the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.grad.html#jax.grad"><code class="language-plaintext highlighter-rouge">grad()</code></a></strong> transformation computes the gradient of the loss function, and the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp"><code class="language-plaintext highlighter-rouge">jvp()</code></a></strong> transformation computes the Jacobian-vector product. (NOTE: <code class="language-plaintext highlighter-rouge">grad()</code> and <code class="language-plaintext highlighter-rouge">jvp()</code> are powerful and flexible transformations at the core of JAX’s <a href="https://docs.jax.dev/en/latest/automatic-differentiation.html">automatic differentiation</a> machinery.)</p>
+  </li>
+  <li>The <code class="language-plaintext highlighter-rouge">_get_linear_operator</code> method simply generates a <strong><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.LinearOperator.html"><code class="language-plaintext highlighter-rouge">LinearOperator</code></a></strong> object which provides a common interface for performing matrix-vector products.</li>
+  <li>The “public” <code class="language-plaintext highlighter-rouge">get_spectrum</code> method serves as the access point for users to invoke the <code class="language-plaintext highlighter-rouge">eigsh</code> routine for computing the Hessian eigenspectrum.</li>
+</ol>
+
+<p><strong>TIP</strong>: The running time of the entire eigenspectrum computation routine is hugely infulenced by the running time of the <code class="language-plaintext highlighter-rouge">_matvec</code> method since this method is called repeatedly from inside <code class="language-plaintext highlighter-rouge">eigsh</code> (for computing the Arnoldi vectors). The running time of <code class="language-plaintext highlighter-rouge">_matvec</code> is in turn dependent on the running time of <code class="language-plaintext highlighter-rouge">grad(self.loss)</code>, which in turn depends on the running time of <code class="language-plaintext highlighter-rouge">self.loss</code>. The overall performance can be dramatically improved by using JAX’s <a href="https://docs.jax.dev/en/latest/jit-compilation.html">just-in-time compilation</a> transformation <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jit.html#jax.jit"><code class="language-plaintext highlighter-rouge">jit()</code></a></strong> on <code class="language-plaintext highlighter-rouge">self.loss</code> (and possibly <code class="language-plaintext highlighter-rouge">grad(self.loss))</code>.</p>
+
+<p><strong>TIP</strong>: If the <code class="language-plaintext highlighter-rouge">v0</code> argument is set to <code class="language-plaintext highlighter-rouge">None</code>, <code class="language-plaintext highlighter-rouge">eigsh</code> will randomly generate a starting vector. This means a different set of eigenvectors will be returned by two identical calls to <code class="language-plaintext highlighter-rouge">eigsh</code>. This can lead to confusion. For the sake of reproducibility, it is better to generate a random vector yourself and supply it to <code class="language-plaintext highlighter-rouge">eigsh</code>.</p>
+
+<p>Now that we have reviewed the core module, let’s go ahead and invoke it for computating the Hessian eigenspectrum.</p>
+
+<h2 id="computing-the-hessian-eigenspectrum">Computing the Hessian eigenspectrum</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Create an analyzer instance
+</span><span class="n">ha</span> <span class="o">=</span> <span class="n">HessianAnalyzer</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span><span class="p">,</span> <span class="n">forward_copy_torch</span><span class="p">,</span> <span class="n">MSE_loss_copy</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+
+<span class="c1"># Configure arguments to be supplied to eigsh
+</span><span class="n">eigsh_args</span> <span class="o">=</span> <span class="n">EigshArgs</span><span class="p">(</span>
+    <span class="n">k</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+    <span class="n">sigma</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+    <span class="n">which</span><span class="o">=</span><span class="s">'LM'</span><span class="p">,</span>
+    <span class="n">v0</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+    <span class="n">tol</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span>
+    <span class="n">return_eigenvectors</span><span class="o">=</span><span class="bp">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Compute the eigenspectrum
+</span><span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">ha</span><span class="p">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">eigsh_args</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>Done!</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># eigenvalues
+</span><span class="n">eigvals</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([-1.1432382 , -0.61654264,  0.1918977 ,  1.1418587 ,  1.3489572 ,
+       76.840744  ], dtype=float32)
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># eigenvectors
+</span><span class="n">eigvecs</span><span class="p">.</span><span class="n">shape</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(9, 6)
+</code></pre></div></div>
+
+<h1 id="a-tensorflow-example">A Tensorflow example</h1>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">tensorflow</span> <span class="k">as</span> <span class="n">tf</span>
+
+<span class="n">random</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="c1"># === Data ===
+</span><span class="n">X_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>   <span class="c1"># shape (2, 2)
+</span><span class="n">Y_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">5.</span><span class="p">,</span> <span class="mf">6.</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">).</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># shape (2, 1)
+</span>
+<span class="c1"># === Model Definition ===
+</span><span class="n">model</span> <span class="o">=</span> <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">Sequential</span><span class="p">([</span>
+    <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">layers</span><span class="p">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">'dense_1'</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,)),</span>  <span class="c1"># Hidden: 2x2
+</span>    <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">layers</span><span class="p">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">'dense_2'</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>                     <span class="c1"># Output: 2x1
+</span><span class="p">])</span>
+
+<span class="c1"># === Compile Model ===
+</span><span class="n">model</span><span class="p">.</span><span class="nb">compile</span><span class="p">(</span>
+    <span class="n">optimizer</span><span class="o">=</span><span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">optimizers</span><span class="p">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.01</span><span class="p">),</span>
+    <span class="n">loss</span><span class="o">=</span><span class="s">'mse'</span>
+<span class="p">)</span>
+
+<span class="c1"># === Training ===
+</span><span class="n">model</span><span class="p">.</span><span class="n">fit</span><span class="p">(</span><span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">epochs</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Epoch 1/2
+WARNING:tensorflow:6 out of the last 11 calls to &lt;function TensorFlowTrainer._make_function.&lt;locals&gt;.multi_step_on_iterator at 0x17a48dd00&gt; triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+[1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 200ms/step - loss: 12.3536
+Epoch 2/2
+[1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 46ms/step - loss: 2.2821
+
+
+
+
+
+&lt;keras.src.callbacks.history.History at 0x17a470710&gt;
+</code></pre></div></div>
+
+<h2 id="generating-mediating-objects-1">Generating mediating objects</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 1. Model params
+</span><span class="k">def</span> <span class="nf">extract_tf_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">):</span>
+    <span class="n">param_dict</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">model</span><span class="p">.</span><span class="n">layers</span><span class="p">:</span>
+        <span class="n">weights</span> <span class="o">=</span> <span class="n">layer</span><span class="p">.</span><span class="n">get_weights</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">weights</span><span class="p">:</span>  <span class="c1"># Skip layers without weights
+</span>            <span class="n">kernel</span><span class="p">,</span> <span class="n">bias</span> <span class="o">=</span> <span class="n">weights</span>
+            <span class="n">kernel_list</span> <span class="o">=</span> <span class="p">[[</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">kernel</span><span class="p">.</span><span class="n">tolist</span><span class="p">()]</span>
+            <span class="n">bias_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">bias</span><span class="p">.</span><span class="n">tolist</span><span class="p">()]</span>
+            <span class="c1"># Use standard naming: layer_name/kernel and layer_name/bias
+</span>            <span class="n">param_dict</span><span class="p">[</span><span class="sa">f</span><span class="s">"</span><span class="si">{</span><span class="n">layer</span><span class="p">.</span><span class="n">name</span><span class="si">}</span><span class="s">/kernel"</span><span class="p">]</span> <span class="o">=</span> <span class="n">kernel_list</span>
+            <span class="n">param_dict</span><span class="p">[</span><span class="sa">f</span><span class="s">"</span><span class="si">{</span><span class="n">layer</span><span class="p">.</span><span class="n">name</span><span class="si">}</span><span class="s">/bias"</span><span class="p">]</span> <span class="o">=</span> <span class="n">bias_list</span>
+    <span class="k">return</span> <span class="n">param_dict</span>
+
+<span class="n">params</span> <span class="o">=</span> <span class="n">extract_tf_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 2. Training data
+# # Not casting function needed since tensorflow and JAX both work directly with numpy arrays
+</span></code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 3. Output function
+</span><span class="k">def</span> <span class="nf">forward_copy_tf</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+    <span class="n">w1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_1/kernel'</span><span class="p">])</span>
+    <span class="n">b1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_1/bias'</span><span class="p">])</span>
+    <span class="n">w2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_2/kernel'</span><span class="p">])</span>
+    <span class="n">b2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_2/bias'</span><span class="p">])</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w1</span><span class="p">)</span> <span class="o">+</span> <span class="n">b1</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w2</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
+    <span class="k">return</span> <span class="n">x</span>
+
+<span class="c1"># Example input to test our output function
+</span><span class="n">x_input</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+
+<span class="n">orig_output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">tf</span><span class="p">.</span><span class="n">convert_to_tensor</span><span class="p">(</span><span class="n">x_input</span><span class="p">))</span>
+<span class="n">new_output</span> <span class="o">=</span> <span class="n">forward_copy_tf</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">jnp</span><span class="p">.</span><span class="n">squeeze</span><span class="p">(</span><span class="n">x_input</span><span class="p">))</span>
+
+<span class="k">print</span><span class="p">(</span><span class="s">'original output:'</span><span class="p">,</span> <span class="n">orig_output</span><span class="p">.</span><span class="n">numpy</span><span class="p">())</span>
+<span class="k">print</span><span class="p">(</span><span class="s">'new output: '</span><span class="p">,</span> <span class="n">new_output</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>original output: [[3.1914136]]
+new output:  [3.1914134]
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 4. Loss function
+# # We can use the existing generator function for MSE loss.
+</span>
+<span class="n">MSE_loss_copy_tf</span> <span class="o">=</span> <span class="n">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">forward_copy_tf</span><span class="p">)</span>
+
+<span class="c1"># Test that our loss matches the original model's loss
+## new loss
+</span><span class="n">params_flat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">new_loss</span> <span class="o">=</span> <span class="n">MSE_loss_copy_tf</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
+
+<span class="c1">## original loss
+</span><span class="n">predictions</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">X_np</span><span class="p">)</span>
+<span class="n">mse_loss_fn</span> <span class="o">=</span> <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">losses</span><span class="p">.</span><span class="n">MeanSquaredError</span><span class="p">()</span>
+<span class="n">original_loss</span> <span class="o">=</span> <span class="n">mse_loss_fn</span><span class="p">(</span><span class="n">Y_np</span><span class="p">,</span> <span class="n">predictions</span><span class="p">).</span><span class="n">numpy</span><span class="p">()</span>
+
+<span class="k">print</span><span class="p">(</span><span class="n">new_loss</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">original_loss</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>2.0336998
+2.0336993
+</code></pre></div></div>
+
+<h2 id="computing-the-hessian-eigenspectrum-1">Computing the Hessian eigenspectrum</h2>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Create an analyzer instance
+</span><span class="n">ha</span> <span class="o">=</span> <span class="n">HessianAnalyzer</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">forward_copy_tf</span><span class="p">,</span> <span class="n">MSE_loss_copy_tf</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+
+<span class="c1"># Configure arguments to be supplied to eigsh
+</span><span class="n">eigsh_args</span> <span class="o">=</span> <span class="n">EigshArgs</span><span class="p">(</span>
+    <span class="n">k</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+    <span class="n">sigma</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+    <span class="n">which</span><span class="o">=</span><span class="s">'LM'</span><span class="p">,</span>
+    <span class="n">v0</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+    <span class="n">tol</span><span class="o">=</span><span class="mf">0.001</span><span class="p">,</span>
+    <span class="n">return_eigenvectors</span><span class="o">=</span><span class="bp">True</span>
+<span class="p">)</span>
+
+<span class="c1"># Compute the eigenspectrum
+</span><span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">ha</span><span class="p">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">eigsh_args</span><span class="p">)</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">eigvals</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([ -1.2113413 ,  -0.8476425 ,   0.13638566,   0.99271876,
+         1.5289528 , 109.21992   ], dtype=float32)
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">eigvecs</span><span class="p">.</span><span class="n">shape</span>
+</code></pre></div></div>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(9, 6)
+</code></pre></div></div>
+
+  
+</article>
+
+
+
+<footer>
+  <div>Mathematics of Machine Learning and Optimization</div>
+  <nav><a href="mailto:ayush.bharadwaj@gmail.com" ><svg aria-label="Mail" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#envelope"></use></svg></a><a href="https://github.com/ayusbhar2" ><svg aria-label="Github" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#github"></use></svg></a><a href="https://www.linkedin.com/in/ayushbharadwaj/" ><svg aria-label="LinkedIn" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#linkedin"></use></svg></a></nav>
+
+</footer>
+
+
+</html>
