@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<title>Hessian analysis with JAX: a platform-agnostic approach | Mathematics of Machine Learning and Optimization</title>
+<title>Hessian analysis with JAX: a platform-agnostic, high-performance approach | Mathematics of Machine Learning and Optimization</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Ayush Bharadwaj">
@@ -58,7 +58,7 @@
 
 <article>
   <header>
-  <h1><a href="/hessian-analysis-with-jax/">Hessian analysis with JAX: a platform-agnostic approach</a></h1><time datetime="2025-07-31T00:00:00-07:00">July 31, 2025</time>
+  <h1><a href="/hessian-analysis-with-jax/">Hessian analysis with JAX: a platform-agnostic, high-performance approach</a></h1><time datetime="2025-07-31T00:00:00-07:00">July 31, 2025</time>
 </header>
 
   <p>In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.</p>
@@ -232,8 +232,10 @@ Epoch 10, Loss: 1.7286
     <span class="k">return</span> <span class="n">x</span> 
 
 <span class="c1"># Test that our output matches original model
-</span><span class="k">print</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)))</span>
-<span class="k">print</span><span class="p">(</span><span class="n">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">])))</span>
+</span><span class="n">original_output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">))</span>
+<span class="n">new_output</span> <span class="o">=</span> <span class="n">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]))</span>
+<span class="k">print</span><span class="p">(</span><span class="n">original_output</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">new_output</span><span class="p">)</span>
 </code></pre></div></div>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tensor([3.3154], grad_fn=&lt;ViewBackward0&gt;)
@@ -261,10 +263,33 @@ Epoch 10, Loss: 1.7286
 <span class="kn">from</span> <span class="nn">jax.flatten_util</span> <span class="kn">import</span> <span class="n">ravel_pytree</span>
 
 <span class="k">def</span> <span class="nf">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">forward_copy</span><span class="p">):</span>
-    <span class="s">"""Returns a loss function object which accepts a 1D parameter array.
+    <span class="s">"""
+    Generates a mean squared error (MSE) loss function with fixed input-output data.
 
-    Args:
-    
+    This function flattens a PyTree of model parameters and returns a callable that computes 
+    the MSE loss between predicted and target outputs for a fixed dataset (X, Y), given a 
+    flattened parameter vector.
+
+    Parameters:
+    ----------
+    params : PyTree
+        A nested structure of JAX arrays representing the model parameters.
+
+    X : jnp.array
+        Input data where each element `X[i]` is passed to the model.
+
+    Y : jnp.array
+        Target output data where `Y[i]` is the target corresponding to input `X[i]`.
+
+    forward_copy : Callable
+        A pure function of the form `forward_copy(params, x)` that computes the model's 
+        output given parameters `params` and a single input `x`.
+
+    Returns:
+    -------
+    loss_fn : Callable
+        A function `loss_fn(params_flat)` that takes a flattened parameter vector 
+        and returns the mean squared error over the dataset (X, Y).
     """</span>
 
     <span class="n">params_flat</span><span class="p">,</span> <span class="n">unravel_func</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
@@ -276,7 +301,8 @@ Epoch 10, Loss: 1.7286
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
             <span class="n">s</span> <span class="o">+=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">linalg</span><span class="p">.</span><span class="n">norm</span><span class="p">(</span><span class="n">forward_copy</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">-</span> <span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span>
         <span class="k">return</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">m</span><span class="p">)</span> <span class="o">*</span> <span class="n">s</span>
-    <span class="k">return</span> <span class="n">partial</span><span class="p">(</span><span class="n">_MSE_loss</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+    <span class="n">loss_fn</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">_MSE_loss</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">loss_fn</span>
 </code></pre></div></div>
 
 <p>Things to note:</p>
@@ -301,10 +327,11 @@ Epoch 10, Loss: 1.7286
 
 
 <span class="c1"># Test that our loss matches the original model's loss
-</span><span class="n">params_flat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
-<span class="n">result</span> <span class="o">=</span> <span class="n">MSE_loss_copy</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
-<span class="k">print</span><span class="p">(</span><span class="n">criterion</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">Y</span><span class="p">))</span>
-<span class="k">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+</span><span class="n">original_loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">Y</span><span class="p">)</span>
+<span class="n">params_flat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+<span class="n">new_loss</span> <span class="o">=</span> <span class="n">MSE_loss_copy</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">original_loss</span><span class="p">)</span>
+<span class="k">print</span><span class="p">(</span><span class="n">new_loss</span><span class="p">)</span>
 </code></pre></div></div>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>tensor(1.6969, grad_fn=&lt;MseLossBackward0&gt;)
@@ -339,7 +366,46 @@ Epoch 10, Loss: 1.7286
 
 
 <span class="k">class</span> <span class="nc">HessianAnalyzer</span><span class="p">:</span>
-    <span class="s">"""."""</span>
+    <span class="s">"""
+    A utility class for analyzing the Hessian of a scalar loss function with respect 
+    to model parameters using JAX and SciPy.
+
+    This class enables efficient computation of Hessian-vector products (HVPs) 
+    and eigenvalue/eigenvector analysis of the Hessian matrix without explicitly 
+    forming it.
+
+    Attributes
+    ----------
+    params : PyTree
+        Model parameters (e.g., weights of a neural network).
+    
+    X_train : jnp.array
+        Training input data.
+    
+    Y_train : jnp.array
+        Training target data.
+
+    forward : Callable
+        A function `forward(params, x)` that computes the model's output.
+
+    loss : Callable
+        A scalar-valued loss function `loss(params)` defined on the flattened parameter vector.
+
+    dtype : jnp.dtype
+        Data type used in LinearOperator construction. Default is jnp.float32.
+
+    Methods
+    -------
+    get_spectrum(eigsh_args: EigshArgs)
+        Computes the smallest or largest eigenvalues and eigenvectors of the Hessian
+        using `scipy.sparse.linalg.eigsh`, based on parameters in `eigsh_args`.
+
+    _matvec(v)
+        Computes the Hessian-vector product H·v using forward-mode autodiff.
+
+    _get_linear_operator()
+        Constructs a `scipy.sparse.linalg.LinearOperator` that represents the Hessian.
+    """</span>
     <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">forward</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">):</span>
         <span class="s">"""."""</span>
         <span class="bp">self</span><span class="p">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
@@ -421,11 +487,13 @@ Epoch 10, Loss: 1.7286
 
 <p>Done!</p>
 
-<p>To recap, we have utilized our two-part framework to compute the Hessian eigenvalues and eigenvectors of a Pytorch model using JAX. Why is this a big deal? Well, in order to understand that, let’s take a look at the code changes needed to analyze a tensorflow model.</p>
+<p>To recap, we have utilized our two-part framework to compute the Hessian eigenvalues and eigenvectors of a Pytorch model using JAX. <em>And we did this by implementing the necessary code changes as formal, reusable and testable functions, while entirely avoiding any code changes to the core module.</em></p>
+
+<p>Now let’s take a look at an end-to-end example of analyzing a <em>tensorflow</em> model using our framework.</p>
 
 <h1 id="a-tensorflow-example">A Tensorflow example</h1>
 
-<p>Once again, we train the tensorflow model ourselves for illustration.</p>
+<p>Once again, we train the tensorflow model ourselves for illustration (although, this doesn’t have to be the case).</p>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
 <span class="kn">import</span> <span class="nn">random</span>
@@ -458,12 +526,6 @@ WARNING:tensorflow:6 out of the last 11 calls to &lt;function TensorFlowTrainer.
 [1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 200ms/step - loss: 12.3536
 Epoch 2/2
 [1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 46ms/step - loss: 2.2821
-
-
-
-
-
-&lt;keras.src.callbacks.history.History at 0x17a470710&gt;
 </code></pre></div></div>
 
 <h2 id="generating-mediating-objects-1">Generating mediating objects</h2>
@@ -570,7 +632,9 @@ new output:  [3.1914134]
 
 <p>Done!</p>
 
-<p>Note that we were able to seamlessly</p>
+<h1 id="recap">Recap</h1>
+<p>In this post, we examined a proposed framework for platform-agnostic Hessian analysis (viz. eigenspectrum computation) of deep learning models using a high-performance JAX backend. This framework allowed us to switch between platforms (e.g. Pytorch and tensroflow) by implementing a limited number of necessary code changes in the form of reusable and testable functions, while completely avoiding any changes to the core numerical code.</p>
+
 
   
 </article>

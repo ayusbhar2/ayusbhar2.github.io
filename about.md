@@ -4,4 +4,4 @@ title: "About"
 permalink: /about
 ---
 
-My name is Ayush Bharadwaj. As a seasoned mathematician / data scientist / software engineer, I enjoy solving hard and ill-defined problems. I am currently interested in making AI safe for widespread use.
+My name is Ayush Bharadwaj. As a mathematician, engineer and researcher, I enjoy solving nebulous and hard problems. I am currently interested in making AI safe for widespread use.

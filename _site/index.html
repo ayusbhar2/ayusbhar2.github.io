@@ -52,32 +52,51 @@
 </header>
 
 
+  
   <article>
-  <header><h1>Posts</h1></header>
-  <ul class="archive">
-    
-    <li>
-      <time datetime="2025-07-31T00:00:00-07:00">2025-07-31</time>
-      <a href="/hessian-analysis-with-jax/">Hessian analysis with JAX: a platform-agnostic approach</a>
-    </li>
-    
-    <li>
-      <time datetime="2024-03-15T00:00:00-07:00">2024-03-15</time>
-      <a href="/verifying-neural-nertwork-robustness-using-linear-programming/">Verifying Neural Network Robustness with Linear Programming</a>
-    </li>
-    
-    <li>
-      <time datetime="2023-06-05T00:00:00-07:00">2023-06-05</time>
-      <a href="/unit-commitment-problem/">Parametric Mixed-Integer Programming for Unit Commitment in Power Systems</a>
-    </li>
-    
-    <li>
-      <time datetime="2023-05-18T00:00:00-07:00">2023-05-18</time>
-      <a href="/network-optimization-case-study/">Network Optimization Case Study: Aiding Allies</a>
-    </li>
-    
-  </ul>
-</article>
+    <header>
+  <h1><a href="/hessian-analysis-with-jax/">Hessian analysis with JAX: a platform-agnostic, high-performance approach</a></h1><time datetime="2025-07-31T00:00:00-07:00">July 31, 2025</time>
+</header>
+
+    <p>In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.</p>
+
+    <div class="more"><a href="/hessian-analysis-with-jax/">read more</a></div>
+  </article>
+
+  <article>
+    <header>
+  <h1><a href="/verifying-neural-nertwork-robustness-using-linear-programming/">Verifying Neural Network Robustness with Linear Programming</a></h1><time datetime="2024-03-15T00:00:00-07:00">March 15, 2024</time>
+</header>
+
+    <p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
+
+    <div class="more"><a href="/verifying-neural-nertwork-robustness-using-linear-programming/">read more</a></div>
+  </article>
+
+  <article>
+    <header>
+  <h1><a href="/unit-commitment-problem/">Parametric Mixed-Integer Programming for Unit Commitment in Power Systems</a></h1><time datetime="2023-06-05T00:00:00-07:00">June 05, 2023</time>
+</header>
+
+    <p>The Unit Commitment Problem (UCP) <a href="#References">[1]</a> in power systems is the problem of scheduling the optimal number of power generating units (or simply units) to meet the total demand in each time period (or slot) of a planning horizon. The UCP is an optimization problem that aims to minimize the running costs, startup costs and shutdown costs of the units while satisfying constraints that guarantee appropriate operating conditions for the units.</p>
+
+    <div class="more"><a href="/unit-commitment-problem/">read more</a></div>
+  </article>
+
+  <article>
+    <header>
+  <h1><a href="/network-optimization-case-study/">Network Optimization Case Study: Aiding Allies</a></h1><time datetime="2023-05-18T00:00:00-07:00">May 18, 2023</time>
+</header>
+
+    <p>[Source: Frederick S. Hillier and Gerald J. Lieberman.  <em>Introduction to Operations Research - 7th ed.</em>, 2000, McGraw-Hill, ISBN 0-07-232169-5]</p>
+
+<p>A rebel army is attempting to overthrow the elected government of the Russian Federation. The United States government has decided to assist its ally by quickly sending troops and supplies to the Federation. A plan needs to be developed for shipping the troops and supplies most effectively. Depending on the overall measure of performance, the analysis requires formulating and solving a shortest-path problem, a minimum cost flow problem, or a maximum flow problem.</p>
+
+    <div class="more"><a href="/network-optimization-case-study/">read more</a></div>
+  </article>
+
+
+
 
 
 

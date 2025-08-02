@@ -1,10 +1,11 @@
 ---
-title: "Hessian analysis with JAX: a platform-agnostic approach"
+title: "Hessian analysis with JAX: a platform-agnostic, high-performance approach"
 layout: post
 mathjax: true
 ---
 
 In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.
+
 
 The goal of this post is to present a simple, [JAX](https://docs.jax.dev/en/latest/index.html)-based framework to address the above difficulty. This framework will help us:
 
@@ -182,8 +183,10 @@ def forward_copy_torch(params, x):
     return x 
 
 # Test that our output matches original model
-print(model(torch.tensor(np.array([1., 2.]), dtype=torch.float32)))
-print(forward_copy_torch(params, jnp.array([1., 2.])))
+original_output = model(torch.tensor(np.array([1., 2.]), dtype=torch.float32))
+new_output = forward_copy_torch(params, jnp.array([1., 2.]))
+print(original_output)
+print(new_output)
 ```
 
     tensor([3.3154], grad_fn=<ViewBackward0>)
@@ -211,10 +214,33 @@ from functools import partial
 from jax.flatten_util import ravel_pytree
 
 def generate_MSE_loss_func(params, X, Y, forward_copy):
-    """Returns a loss function object which accepts a 1D parameter array.
+    """
+    Generates a mean squared error (MSE) loss function with fixed input-output data.
 
-    Args:
-    
+    This function flattens a PyTree of model parameters and returns a callable that computes 
+    the MSE loss between predicted and target outputs for a fixed dataset (X, Y), given a 
+    flattened parameter vector.
+
+    Parameters:
+    ----------
+    params : PyTree
+        A nested structure of JAX arrays representing the model parameters.
+
+    X : jnp.array
+        Input data where each element `X[i]` is passed to the model.
+
+    Y : jnp.array
+        Target output data where `Y[i]` is the target corresponding to input `X[i]`.
+
+    forward_copy : Callable
+        A pure function of the form `forward_copy(params, x)` that computes the model's 
+        output given parameters `params` and a single input `x`.
+
+    Returns:
+    -------
+    loss_fn : Callable
+        A function `loss_fn(params_flat)` that takes a flattened parameter vector 
+        and returns the mean squared error over the dataset (X, Y).
     """
 
     params_flat, unravel_func = ravel_pytree(params)
@@ -226,7 +252,8 @@ def generate_MSE_loss_func(params, X, Y, forward_copy):
         for i in range(m):
             s += jnp.linalg.norm(forward_copy(params, X[i]) - Y[i]) ** 2
         return (1./m) * s
-    return partial(_MSE_loss, X, Y)
+    loss_fn = partial(_MSE_loss, X, Y)
+    return loss_fn
 ```
 
 Things to note:
@@ -249,10 +276,11 @@ MSE_loss_copy = generate_MSE_loss_func(params, X_jnp, Y_jnp, forward_copy_torch)
 
 
 # Test that our loss matches the original model's loss
+original_loss = criterion(model(X), Y)
 params_flat, _ = ravel_pytree(params)
-result = MSE_loss_copy(params_flat)
-print(criterion(model(X), Y))
-print(result)
+new_loss = MSE_loss_copy(params_flat)
+print(original_loss)
+print(new_loss)
 ```
 
     tensor(1.6969, grad_fn=<MseLossBackward0>)
@@ -288,7 +316,46 @@ class EigshArgs:
 
 
 class HessianAnalyzer:
-    """."""
+    """
+    A utility class for analyzing the Hessian of a scalar loss function with respect 
+    to model parameters using JAX and SciPy.
+
+    This class enables efficient computation of Hessian-vector products (HVPs) 
+    and eigenvalue/eigenvector analysis of the Hessian matrix without explicitly 
+    forming it.
+
+    Attributes
+    ----------
+    params : PyTree
+        Model parameters (e.g., weights of a neural network).
+    
+    X_train : jnp.array
+        Training input data.
+    
+    Y_train : jnp.array
+        Training target data.
+
+    forward : Callable
+        A function `forward(params, x)` that computes the model's output.
+
+    loss : Callable
+        A scalar-valued loss function `loss(params)` defined on the flattened parameter vector.
+
+    dtype : jnp.dtype
+        Data type used in LinearOperator construction. Default is jnp.float32.
+
+    Methods
+    -------
+    get_spectrum(eigsh_args: EigshArgs)
+        Computes the smallest or largest eigenvalues and eigenvectors of the Hessian
+        using `scipy.sparse.linalg.eigsh`, based on parameters in `eigsh_args`.
+
+    _matvec(v)
+        Computes the Hessian-vector product H·v using forward-mode autodiff.
+
+    _get_linear_operator()
+        Constructs a `scipy.sparse.linalg.LinearOperator` that represents the Hessian.
+    """
     def __init__(self, params, X_train, Y_train, forward, loss, dtype=jnp.float32):
         """."""
         self.params = params
@@ -378,11 +445,15 @@ eigvecs.shape
 
 Done!
 
-To recap, we have utilized our two-part framework to compute the Hessian eigenvalues and eigenvectors of a Pytorch model using JAX. Why is this a big deal? Well, in order to understand that, let's take a look at the code changes needed to analyze a tensorflow model.
+To recap, we have utilized our two-part framework to compute the Hessian eigenvalues and eigenvectors of a Pytorch model using JAX. *And we did this by implementing the necessary code changes as formal, reusable and testable functions, while entirely avoiding any code changes to the core module.*
+
+
+
+Now let's take a look at an end-to-end example of analyzing a *tensorflow* model using our framework.
 
 # A Tensorflow example
 
-Once again, we train the tensorflow model ourselves for illustration.
+Once again, we train the tensorflow model ourselves for illustration (although, this doesn't have to be the case).
 
 ```python
 import numpy as np
@@ -417,11 +488,6 @@ model.fit(X_np, Y_np, epochs=2, batch_size=2, verbose=1)
     Epoch 2/2
     [1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 46ms/step - loss: 2.2821
 
-
-
-
-
-    <keras.src.callbacks.history.History at 0x17a470710>
 
 
 ## Generating mediating objects
@@ -547,4 +613,10 @@ eigvecs.shape
 
 Done!
 
-Note that we were able to seamlessly 
+# Recap
+In this post, we examined a proposed framework for platform-agnostic Hessian analysis (viz. eigenspectrum computation) of deep learning models using a high-performance JAX backend. This framework allowed us to switch between platforms (e.g. Pytorch and tensroflow) by implementing a limited number of necessary code changes in the form of reusable and testable functions, while completely avoiding any changes to the core numerical code.
+
+
+
+
+
