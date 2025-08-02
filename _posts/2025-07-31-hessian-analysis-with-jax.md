@@ -20,7 +20,7 @@ NOTE: There are several reasons for choosing JAX for this task - performance, fl
 
 NOTE: Even if you don't anticipate working across multiple platforms, you may still want to consider this framework for the above reasons. 
 
-NOTE: This post assumes the reader is familiar with `scipy.sparse.linalg.eigsh` and how it can be used to compute the Hessian eigenspectrum via Hessian-vector products. (As a refresher, I recommend reading this [post](https://www.lesswrong.com/posts/mwBaS2qE9RNNfqYBC/recipe-hessian-eigenvector-computation-for-pytorch-models) upto, but excluding, the implementation which is very Pytorch specific.)
+NOTE: This post assumes the reader is familiar with **[`eigsh`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.eigsh.html#scipy.sparse.linalg.eigsh)** and how it can be used to compute the Hessian eigenspectrum via Hessian-vector products. (As a refresher, I recommend reading this [post](https://www.lesswrong.com/posts/mwBaS2qE9RNNfqYBC/recipe-hessian-eigenvector-computation-for-pytorch-models) upto, but excluding, the implementation which is very Pytorch specific.)
 
 NOTE: The code presented here is written for simplicity and clarity, not for compute or memory efficiency. I will try to point out obvious optimizations where possible.
 
@@ -198,9 +198,9 @@ print(forward_copy_torch(params, jnp.array([1., 2.])))
 
 The fourth and final mediating object is a JAX version of the source model's loss function. Once again, we need to write this function ourselves. This new function must accept the first three mediating objects (i.e. parameters, training data, and output function) as inputs and produce the same training loss as the original model. But we have to be a bit more careful here.
 
-As we will see in the next section, the core module uses the `jax.jvp()` transformation along with the `eigsh` function to compute the Hessian eigenspectrum. In short, `jax.jvp()` facilitates the computation of Hessian-vector products via automatic differentiation, and `eigsh` utilizes these Hessian-vector products to compute the eigenspecturm. A close examination of the above two APIs will reveal two important facts:
+As we will see in the next section, the core module uses the **[`jax.jvp()`](https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp)** transformation along with the **[`eigsh`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.eigsh.html#scipy.sparse.linalg.eigsh)** function to compute the Hessian eigenspectrum. In short, `jax.jvp()` facilitates the computation of Hessian-vector products via automatic differentiation, and `eigsh` utilizes these Hessian-vector products to compute the eigenspecturm. A close examination of the above two APIs will reveal two important facts:
 
-- For automatic differentiation to work, our loss function must be explicitly defined as a function of the parameters (i.e. we cannot use something generic like `torch.nn.MSE_loss()` which only takes outputs and targets as its  arguments). 
+- For automatic differentiation to work, our loss function must be explicitly defined as a function of the parameters (i.e. we cannot use something generic like **[`torch.nn.MSE_loss()`](https://docs.pytorch.org/docs/stable/generated/torch.nn.MSELoss.html)** which only takes outputs and targets as its  arguments). 
 - For `eigsh` to work, our loss function must specifically accept a 1D array of parameters as its argument (and not an iterable or array of some other shape).
 
 We achieve the above conditions by using a function generator as shown below.
@@ -231,7 +231,7 @@ def generate_MSE_loss_func(params, X, Y, forward_copy):
 
 Things to note:
 
-- **[`ravel_pytree`](https://docs.jax.dev/en/latest/_autosummary/jax.flatten_util.ravel_pytree.html#jax.flatten_util.ravel_pytree)** implements out-of-the-box, deterministic flattening and unflatteining of arbitrary iterables. (A powerful tool that, incidentally, doesn't have a counterpart in Pytorch). This is just one of many functionalities provided by JAX's [Pytree](https://docs.jax.dev/en/latest/pytrees.html) API which makes parameter handling in JAX truly generalizable across model types, architectures and specification formats.
+- **[`jax.flatten_util.ravel_pytree`](https://docs.jax.dev/en/latest/_autosummary/jax.flatten_util.ravel_pytree.html#jax.flatten_util.ravel_pytree)** implements out-of-the-box, deterministic flattening and unflatteining of arbitrary iterables. (A powerful tool that, incidentally, doesn't have a counterpart in Pytorch). This is just one of many functionalities provided by JAX's Pytree API which makes parameter handling in JAX truly generalizable across model types, architectures and specification formats.
 
 - We only need to write the `generate_MSE_loss_func` function once. We can simply reuse it for analyzing any model that was trained using MSE loss.
 
@@ -258,11 +258,12 @@ print(result)
     tensor(1.6969, grad_fn=<MseLossBackward0>)
     1.6968625
 
-
-## A core module review
-
 Once we have generated our mediating objects, we need to pass them to the core module for eigenspectrum computation. But before we do that, let's take a look at what the core module contains. 
 
+## A core module detour
+
+
+Shown below is a simple, one-file version of what the core module could look like.
 
 ```python
 #! core.py
@@ -318,16 +319,17 @@ class HessianAnalyzer:
 A few things to note:
 
 1. The `HessianAnalyzer` class encapsulates the entire eigenspectrum computation functionality, and provides a simple interface for interacting with the core module.
-2. The `_matvec` method implements the Hessian-vector product. Since this is an important computation, it warrants some attention. First we make a simple observation - the Hessian is nothing but the Jacobian of the gradient. So, for a point $$\theta$$ and a direction vector $$v$$ in parameter space, we have $$\begin{equation}H_{\theta}\cdot v = J_{\theta}(\nabla \mathcal{L}) \cdot v\end{equation}$$. The right hand side of the above equation is precisely what `_matvec` returns. More specifically, the **[`grad()`](https://docs.jax.dev/en/latest/_autosummary/jax.grad.html#jax.grad)** transformation computes the gradient of the loss function, and the **[`jvp()`](https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp)** transformation computes the Jacobian-vector product. (NOTE: `grad()` and `jvp()` are powerful and flexible transformations at the core of JAX's [automatic differentiation](https://docs.jax.dev/en/latest/automatic-differentiation.html) machinery.)
+2. The `_matvec` method implements the Hessian-vector product. Since this is an important computation, it warrants some attention. First we make a simple observation - the Hessian is nothing but the Jacobian of the gradient. So, for a point $$\theta$$ and a direction vector $$v$$ in parameter space, we have $$\begin{equation}H_{\theta}\cdot v = J_{\theta}(\nabla \mathcal{L}) \cdot v\end{equation}$$. The right hand side of the above equation is precisely what `_matvec` returns. More specifically, the **[`grad()`](https://docs.jax.dev/en/latest/_autosummary/jax.grad.html#jax.grad)** transformation computes the gradient of the loss function, and the **[`jvp()`](https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp)** transformation computes the Jacobian-vector product. (`grad()` and `jvp()` are powerful and flexible transformations at the core of JAX's [automatic differentiation](https://docs.jax.dev/en/latest/automatic-differentiation.html) machinery.)
 
 3. The `_get_linear_operator` method simply generates a **[`LinearOperator`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.LinearOperator.html)** object which provides a common interface for performing matrix-vector products.
 4. The "public" `get_spectrum` method serves as the access point for users to invoke the `eigsh` routine for computing the Hessian eigenspectrum.
+5. The `EigshArgs` class helps manage the arguments to be passed to `eigsh`. More or fewer arguments can be configured based on the usecase.
 
 **TIP**: The running time of the entire eigenspectrum computation routine is hugely infulenced by the running time of the `_matvec` method since this method is called repeatedly from inside `eigsh` (for computing the Arnoldi vectors). The running time of `_matvec` is in turn dependent on the running time of `grad(self.loss)`, which in turn depends on the running time of `self.loss`. The overall performance can be dramatically improved by using JAX's [just-in-time compilation](https://docs.jax.dev/en/latest/jit-compilation.html) transformation **[`jit()`](https://docs.jax.dev/en/latest/_autosummary/jax.jit.html#jax.jit)** on `self.loss` (and possibly `grad(self.loss))`.
 
-**TIP**: If the `v0` argument is set to `None`, `eigsh` will randomly generate a starting vector. This means a different set of eigenvectors will be returned by two identical calls to `eigsh`. This can lead to confusion. For the sake of reproducibility, it is better to generate a random vector yourself and supply it to `eigsh`.
+**CAUTION**: If the `v0` argument is set to `None`, `eigsh` will randomly generate a starting vector. This means a different set of eigenvectors will be returned by two identical calls to `eigsh`. This can lead to confusion. For the sake of reproducibility, it is better to generate a random vector yourself and supply it to `eigsh`.
 
-Now that we have reviewed the core module, let's go ahead and invoke it for computating the Hessian eigenspectrum.
+Now that we have reviewed the core module, let's go ahead and invoke it for computing the Hessian eigenspectrum.
 
 ## Computing the Hessian eigenspectrum
 
@@ -349,9 +351,6 @@ eigsh_args = EigshArgs(
 # Compute the eigenspectrum
 eigvals, eigvecs = ha.get_spectrum(eigsh_args)
 ```
-
-Done!
-
 
 ```python
 # eigenvalues
@@ -377,10 +376,13 @@ eigvecs.shape
 
     (9, 6)
 
+Done!
 
+To recap, we have utilized our two-part framework to compute the Hessian eigenvalues and eigenvectors of a Pytorch model using JAX. Why is this a big deal? Well, in order to understand that, let's take a look at the code changes needed to analyze a tensorflow model.
 
 # A Tensorflow example
 
+Once again, we train the tensorflow model ourselves for illustration.
 
 ```python
 import numpy as np
@@ -542,3 +544,7 @@ eigvecs.shape
 
 
     (9, 6)
+
+Done!
+
+Note that we were able to seamlessly 
