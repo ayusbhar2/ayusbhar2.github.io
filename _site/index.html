@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-<title>Home | Algebra, Geometry and Applications of Optimization</title>
+<title>Home | Mathematics of Machine Learning and Optimization</title>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="author" content="Ayush Bharadwaj">
@@ -9,7 +9,7 @@
 
 <link rel="stylesheet" href="/assets/css/frame.css">
 
-<link rel="alternate" href="/feed.xml" type="application/atom+xml" title="Algebra, Geometry and Applications of Optimization">
+<link rel="alternate" href="/feed.xml" type="application/atom+xml" title="Mathematics of Machine Learning and Optimization">
 
 
 
@@ -26,7 +26,7 @@
     </a><a aria-label="Projects" href="/projects" >
       <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#"></use></svg>
       <span aria-hidden="true">Projects</span>
-    </a><a aria-label="Resume" href="/assets/files/ayush_resume_v12_ML.pdf" >
+    </a><a aria-label="Resume" href="/assets/files/ayush_resume_v14_AI.pdf" >
       <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#"></use></svg>
       <span aria-hidden="true">Resume</span>
     </a><a aria-label="Mail" href="mailto:ayush.bharadwaj@gmail.com" >
@@ -39,20 +39,40 @@
       <svg aria-hidden="true" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#linkedin"></use></svg>
       <span aria-hidden="true">LinkedIn</span>
     </a></nav>
-  <div class="description">Algebra, Geometry and Applications of Optimization</div>
+  <div class="description">Mathematics of Machine Learning and Optimization</div>
 </aside>
 
 
 
 
 <header>
-  <a href="/" class="title">Algebra, Geometry and Applications of Optimization</a>
-  <nav><a href="/" class="selected">Home</a><a href="/about" >About</a><a href="/projects" >Projects</a><a href="/assets/files/ayush_resume_v12_ML.pdf" >Resume</a></nav>
+  <a href="/" class="title">Mathematics of Machine Learning and Optimization</a>
+  <nav><a href="/" class="selected">Home</a><a href="/about" >About</a><a href="/projects" >Projects</a><a href="/assets/files/ayush_resume_v14_AI.pdf" >Resume</a></nav>
 
 </header>
 
 
   
+  <article>
+    <header>
+  <h1><a href="/hessian-analysis-with-jax/">Hessian analysis with JAX: a platform-agnostic, high-performance approach</a></h1><time datetime="2025-07-31T00:00:00-07:00">July 31, 2025</time>
+</header>
+
+    <p>In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.</p>
+
+    <div class="more"><a href="/hessian-analysis-with-jax/">read more</a></div>
+  </article>
+
+  <article>
+    <header>
+  <h1><a href="/verifying-neural-nertwork-robustness-using-linear-programming/">Verifying Neural Network Robustness with Linear Programming</a></h1><time datetime="2024-03-15T00:00:00-07:00">March 15, 2024</time>
+</header>
+
+    <p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
+
+    <div class="more"><a href="/verifying-neural-nertwork-robustness-using-linear-programming/">read more</a></div>
+  </article>
+
   <article>
     <header>
   <h1><a href="/unit-commitment-problem/">Parametric Mixed-Integer Programming for Unit Commitment in Power Systems</a></h1><time datetime="2023-06-05T00:00:00-07:00">June 05, 2023</time>
@@ -75,16 +95,6 @@
     <div class="more"><a href="/network-optimization-case-study/">read more</a></div>
   </article>
 
-  <article>
-    <header>
-  <h1><a href="/verifying-neural-nertwork-robustness-using-linear-programming/">Verifying Neural Network Robustness with Linear Programming</a></h1><time datetime="2023-05-17T00:00:00-07:00">May 17, 2023</time>
-</header>
-
-    <p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
-
-    <div class="more"><a href="/verifying-neural-nertwork-robustness-using-linear-programming/">read more</a></div>
-  </article>
-
 
 
 
@@ -93,7 +103,7 @@
 
 
 <footer>
-  <div>Algebra, Geometry and Applications of Optimization</div>
+  <div>Mathematics of Machine Learning and Optimization</div>
   <nav><a href="mailto:ayush.bharadwaj@gmail.com" ><svg aria-label="Mail" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#envelope"></use></svg></a><a href="https://github.com/ayusbhar2" ><svg aria-label="Github" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#github"></use></svg></a><a href="https://www.linkedin.com/in/ayushbharadwaj/" ><svg aria-label="LinkedIn" class="icon"><use xlink:href="/assets/fontawesome/icons.svg#linkedin"></use></svg></a></nav>
 
 </footer>
