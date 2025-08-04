@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2025-08-02T15:06:49-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Mathematics of Machine Learning and Optimization</title><subtitle>Mathematics of Machine Learning and Optimization</subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Hessian analysis with JAX: a platform-agnostic, high-performance approach</title><link href="http://localhost:4000/hessian-analysis-with-jax/" rel="alternate" type="text/html" title="Hessian analysis with JAX: a platform-agnostic, high-performance approach" /><published>2025-07-31T00:00:00-07:00</published><updated>2025-07-31T00:00:00-07:00</updated><id>http://localhost:4000/hessian-analysis-with-jax</id><content type="html" xml:base="http://localhost:4000/hessian-analysis-with-jax/"><![CDATA[<p>In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.</p>
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en"><generator uri="https://jekyllrb.com/" version="4.2.2">Jekyll</generator><link href="http://localhost:4000/feed.xml" rel="self" type="application/atom+xml" /><link href="http://localhost:4000/" rel="alternate" type="text/html" hreflang="en" /><updated>2025-08-03T18:26:21-07:00</updated><id>http://localhost:4000/feed.xml</id><title type="html">Mathematics of Machine Learning and Optimization</title><subtitle>Mathematics of Machine Learning and Optimization</subtitle><author><name>Ayush Bharadwaj</name></author><entry><title type="html">Hessian analysis with JAX: a platform-agnostic, high-performance approach</title><link href="http://localhost:4000/hessian-analysis-with-jax/" rel="alternate" type="text/html" title="Hessian analysis with JAX: a platform-agnostic, high-performance approach" /><published>2025-07-31T00:00:00-07:00</published><updated>2025-07-31T00:00:00-07:00</updated><id>http://localhost:4000/hessian-analysis-with-jax</id><content type="html" xml:base="http://localhost:4000/hessian-analysis-with-jax/"><![CDATA[<p>In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. PyTorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.</p>
 
 <p>The goal of this post is to present a simple, <a href="https://docs.jax.dev/en/latest/index.html">JAX</a>-based framework to address the above difficulty. This framework will help us:</p>
 
@@ -8,19 +8,21 @@
   <li>disentangle model training from Hessian analysis, facilitating the analysis of pre-trained models.</li>
 </ol>
 
-<p>(In my current SPAR project, we have used the above framework quite successfully.)</p>
+<p><em>(I am currently working on a SPAR project where we have used the above framework quite successfully.)</em></p>
 
-<p>NOTE: For analyzing a model, it is not necessary to train it ourselves as long as we have access to certain defining attributes of the model (details in post).</p>
+<p><em>NOTE: For analyzing a model, it is not necessary to train it ourselves as long as we have access to certain defining attributes of the model (details in post).</em></p>
 
-<p>NOTE: There are several reasons for choosing JAX for this task - performance, flexibility, math-like flavor, numpy-like interface, and the powerful <a href="https://docs.jax.dev/en/latest/pytrees.html">Pytree</a> abstraction for parameter handling (more on each of these in a future post).</p>
+<p><em>NOTE: There are several reasons for choosing JAX for this task - performance, flexibility, math-like flavor, numpy-like interface, and the powerful <a href="https://docs.jax.dev/en/latest/pytrees.html">Pytree</a> abstraction for parameter handling (more on each of these in a future post).</em></p>
 
-<p>NOTE: Even if you don’t anticipate working across multiple platforms, you may still want to consider this framework for the above reasons.</p>
+<p><em>NOTE: Even if you don’t anticipate working across multiple platforms, you may still want to consider this framework for the above reasons.</em></p>
 
-<p>NOTE: This post assumes the reader is familiar with <strong><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.eigsh.html#scipy.sparse.linalg.eigsh"><code class="language-plaintext highlighter-rouge">eigsh</code></a></strong> and how it can be used to compute the Hessian eigenspectrum via Hessian-vector products. (As a refresher, I recommend reading this <a href="https://www.lesswrong.com/posts/mwBaS2qE9RNNfqYBC/recipe-hessian-eigenvector-computation-for-pytorch-models">post</a> upto, but excluding, the implementation which is very Pytorch specific.)</p>
+<p><em>NOTE: This post assumes the reader is familiar with <strong><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.eigsh.html#scipy.sparse.linalg.eigsh"><code class="language-plaintext highlighter-rouge">eigsh</code></a></strong> and how it can be used to compute the Hessian eigenspectrum via Hessian-vector products. (As a refresher, I recommend reading this <a href="https://www.lesswrong.com/posts/mwBaS2qE9RNNfqYBC/recipe-hessian-eigenvector-computation-for-pytorch-models">post</a> upto, but excluding, the implementation which is very Pytorch specific.)</em></p>
 
-<p>NOTE: The code presented here is written for simplicity and clarity, not for compute or memory efficiency. I will try to point out obvious optimizations where possible.</p>
+<p><em>NOTE: The code presented here is written for simplicity and clarity, not for compute or memory efficiency. I will try to point out obvious optimizations where possible.</em></p>
 
-<p>NOTE: The code presented here runs on a single CPU/GPU/TPU. While JAX provides excellent primitives for distributed computations, these are out of scope for this post.</p>
+<p><em>NOTE: The code presented here runs on a single CPU/GPU/TPU. While JAX provides excellent primitives for distributed computations, these are out of scope for this post.</em></p>
+
+<p><em>NOTE: This post can be run as a colab notebook <a href="https://colab.research.google.com/drive/1859TMibh6D9jU7AyCNqxUqTB3SWsH5pg?usp=sharing">here</a>.</em></p>
 
 <h1 id="a-two-part-framework">A two-part framework</h1>
 
@@ -42,11 +44,13 @@
 
 <p>For each new model we want to analyze, we first generate the mediating objects and then pass them on to the (platform-agnostic) core module for eigenspectrum computation.</p>
 
-<p>A key observation behind this framework is that numerical code (e.g. computing the eigenspectum) requires careful memory / compute optimizations and precision handling. As a result, such code should be independent of, and shared across all models/platforms. In particular, this code should not require changes when switching models/platforms. And, while some code changes are inevitable, these changes should be few and limited to parts that are easier to implement and test.</p>
+<p><img src="https://39669.cdn.cke-cs.com/rQvD3VnunXZu34m86e5f/images/9a474596281ea77fbad2bdc9e7a621f065358cd8ef292757.png/w_1894" alt="" /></p>
 
-<h1 id="a-pytorch-example">A Pytorch Example</h1>
+<p>A key observation behind this framework is that numerical code (e.g. computing the eigenspectrum) requires careful memory / compute optimizations and precision handling. As a result, such code should be independent of, and shared across all models/platforms. In particular, this code should not require changes when switching models/platforms. And, while some code changes are inevitable, these changes should be few and limited to parts that are easier to implement and test.</p>
 
-<p>Let’s start by looking at a concrete example. Suppose we want to compute the eigenspectrum of a toy Pytorch MLP model. For this example, we will train the model ourselves.</p>
+<h1 id="a-pytorch-example">A PyTorch Example</h1>
+
+<p>Let’s start by looking at a concrete example. Suppose we want to compute the eigenspectrum of a toy PyTorch MLP model. For this example, we will train the model ourselves.</p>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="n">nn</span>
@@ -73,7 +77,6 @@
 </span>        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># Identity activation (no-op)
 </span>        <span class="k">return</span> <span class="n">x</span>
 </code></pre></div></div>
-
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Initialize model, loss, and optimizer
 </span><span class="n">torch</span><span class="p">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 
@@ -120,14 +123,16 @@ Epoch 10, Loss: 1.7286
     <span class="n">param_dict</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">pytorch_model</span><span class="p">.</span><span class="n">named_parameters</span><span class="p">():</span>
         <span class="c1"># Detach, convert to list, round to 7 decimal places
-</span>        <span class="n">rounded</span> <span class="o">=</span> <span class="n">param</span><span class="p">.</span><span class="n">detach</span><span class="p">().</span><span class="n">cpu</span><span class="p">().</span><span class="n">numpy</span><span class="p">().</span><span class="n">tolist</span><span class="p">()</span>
-        <span class="n">rounded</span> <span class="o">=</span> <span class="p">[[</span><span class="nb">round</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="nb">round</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
-                   <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rounded</span><span class="p">]</span>
+</span>        <span class="n">rounded</span> <span class="o">=</span> <span class="n">param</span><span class="p">.</span><span class="n">detach</span><span class="p">().</span><span class="n">cpu</span><span class="p">().</span><span class="n">numpy</span><span class="p">().</span><span class="n">tolist</span><span class="p">()</span>                
+        <span class="n">rounded</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span>
+            <span class="k">else</span> <span class="nb">round</span><span class="p">(</span><span class="n">row</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">rounded</span>
+        <span class="p">]</span>
         <span class="n">param_dict</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">rounded</span>
     <span class="k">return</span> <span class="n">param_dict</span>
-
-<span class="n">params</span> <span class="o">=</span> <span class="n">extract_pytorch_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
-
+</code></pre></div></div>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">params</span> <span class="o">=</span> <span class="n">extract_pytorch_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 <span class="k">print</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
 </code></pre></div></div>
 
@@ -147,19 +152,21 @@ Epoch 10, Loss: 1.7286
 </span>    <span class="n">X_jnp</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">X</span><span class="p">.</span><span class="n">cpu</span><span class="p">().</span><span class="n">detach</span><span class="p">().</span><span class="n">numpy</span><span class="p">())</span>
     <span class="n">Y_jnp</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">Y</span><span class="p">.</span><span class="n">cpu</span><span class="p">().</span><span class="n">detach</span><span class="p">().</span><span class="n">numpy</span><span class="p">())</span>
     <span class="k">return</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span>
+</code></pre></div></div>
 
-<span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span> <span class="o">=</span> <span class="n">cast_pytorch_tensors_to_jax_arrays</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span> <span class="o">=</span> <span class="n">cast_pytorch_tensors_to_jax_arrays</span><span class="p">(</span><span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
 
 <span class="c1"># print(type(X_jnp))
 # print(type(Y_jnp))
 </span></code></pre></div></div>
 
-<h3 id="3-ouput-function-as-a-python-object">3. Ouput function (as a python object)</h3>
+<h3 id="3-output-function-as-a-python-object">3. Output function (as a python object)</h3>
 
 <p>The third mediating object is a JAX version of the source model’s output function (which we need to write ourselves). This new function must accept the first two mediating objects (i.e. the model parameters and the training set) as inputs, and produce the same outputs as the original model. We will call this function <code class="language-plaintext highlighter-rouge">forward_copy_torch</code>.</p>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 3. Output function
-</span><span class="k">def</span> <span class="nf">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+</span>
+<span class="k">def</span> <span class="nf">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
     <span class="n">w1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc1.weight'</span><span class="p">])</span>
     <span class="n">b1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc1.bias'</span><span class="p">])</span>
     <span class="n">w2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'fc2.weight'</span><span class="p">])</span>
@@ -167,8 +174,9 @@ Epoch 10, Loss: 1.7286
     <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">w1</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">b1</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">w2</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
     <span class="k">return</span> <span class="n">x</span> 
+</code></pre></div></div>
 
-<span class="c1"># Test that our output matches original model
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Test that our output matches original model
 </span><span class="n">original_output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">tensor</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">))</span>
 <span class="n">new_output</span> <span class="o">=</span> <span class="n">forward_copy_torch</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]))</span>
 <span class="k">print</span><span class="p">(</span><span class="n">original_output</span><span class="p">)</span>
@@ -187,7 +195,7 @@ Epoch 10, Loss: 1.7286
 
 <p>The fourth and final mediating object is a JAX version of the source model’s loss function. Once again, we need to write this function ourselves. This new function must accept the first three mediating objects (i.e. parameters, training data, and output function) as inputs and produce the same training loss as the original model. But we have to be a bit more careful here.</p>
 
-<p>As we will see in the next section, the core module uses the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp"><code class="language-plaintext highlighter-rouge">jax.jvp()</code></a></strong> transformation along with the <strong><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.eigsh.html#scipy.sparse.linalg.eigsh"><code class="language-plaintext highlighter-rouge">eigsh</code></a></strong> function to compute the Hessian eigenspectrum. In short, <code class="language-plaintext highlighter-rouge">jax.jvp()</code> facilitates the computation of Hessian-vector products via automatic differentiation, and <code class="language-plaintext highlighter-rouge">eigsh</code> utilizes these Hessian-vector products to compute the eigenspecturm. A close examination of the above two APIs will reveal two important facts:</p>
+<p>As we will see in the next section, the core module uses the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp"><code class="language-plaintext highlighter-rouge">jax.jvp()</code></a></strong> transformation along with the <strong><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.eigsh.html#scipy.sparse.linalg.eigsh"><code class="language-plaintext highlighter-rouge">eigsh</code></a></strong> function to compute the Hessian eigenspectrum. In short, <code class="language-plaintext highlighter-rouge">jax.jvp()</code> facilitates the computation of Hessian-vector products via automatic differentiation, and <code class="language-plaintext highlighter-rouge">eigsh</code> utilizes these Hessian-vector products to compute the eigenspectrum. A close examination of the above two APIs will reveal two important facts:</p>
 
 <ul>
   <li>For automatic differentiation to work, our loss function must be explicitly defined as a function of the parameters (i.e. we cannot use something generic like <strong><a href="https://docs.pytorch.org/docs/stable/generated/torch.nn.MSELoss.html"><code class="language-plaintext highlighter-rouge">torch.nn.MSE_loss()</code></a></strong> which only takes outputs and targets as its  arguments).</li>
@@ -199,13 +207,14 @@ Epoch 10, Loss: 1.7286
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
 <span class="kn">from</span> <span class="nn">jax.flatten_util</span> <span class="kn">import</span> <span class="n">ravel_pytree</span>
 
+
 <span class="k">def</span> <span class="nf">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">forward_copy</span><span class="p">):</span>
     <span class="s">"""
-    Generates a mean squared error (MSE) loss function with fixed input-output data.
+    Generates a MSE loss function with fixed input-output data.
 
-    This function flattens a PyTree of model parameters and returns a callable that computes 
-    the MSE loss between predicted and target outputs for a fixed dataset (X, Y), given a 
-    flattened parameter vector.
+    This function flattens a PyTree of model parameters and returns a callable
+    that computes the MSE loss between predicted and target outputs for a fixed
+    dataset (X, Y), given a flattened parameter vector.
 
     Parameters:
     ----------
@@ -213,20 +222,20 @@ Epoch 10, Loss: 1.7286
         A nested structure of JAX arrays representing the model parameters.
 
     X : jnp.array
-        Input data where each element `X[i]` is passed to the model.
+        Input data where each `X[i]` is passed to the model.
 
     Y : jnp.array
-        Target output data where `Y[i]` is the target corresponding to input `X[i]`.
+        Target output data where `Y[i]` is the target corresponding to `X[i]`.
 
     forward_copy : Callable
-        A pure function of the form `forward_copy(params, x)` that computes the model's 
-        output given parameters `params` and a single input `x`.
+        A pure function of the form `forward_copy(params, x)` that computes the
+        model's output given parameters `params` and a single input `x`.
 
     Returns:
     -------
     loss_fn : Callable
-        A function `loss_fn(params_flat)` that takes a flattened parameter vector 
-        and returns the mean squared error over the dataset (X, Y).
+        A function `loss_fn(params_flat)` that takes a flattened parameter
+        vector and returns the mean squared error over the dataset (X, Y).
     """</span>
 
     <span class="n">params_flat</span><span class="p">,</span> <span class="n">unravel_func</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
@@ -238,6 +247,7 @@ Epoch 10, Loss: 1.7286
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
             <span class="n">s</span> <span class="o">+=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">linalg</span><span class="p">.</span><span class="n">norm</span><span class="p">(</span><span class="n">forward_copy</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">-</span> <span class="n">Y</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span>
         <span class="k">return</span> <span class="p">(</span><span class="mf">1.</span><span class="o">/</span><span class="n">m</span><span class="p">)</span> <span class="o">*</span> <span class="n">s</span>
+
     <span class="n">loss_fn</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">_MSE_loss</span><span class="p">,</span> <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">loss_fn</span>
 </code></pre></div></div>
@@ -246,14 +256,14 @@ Epoch 10, Loss: 1.7286
 
 <ul>
   <li>
-    <p><strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.flatten_util.ravel_pytree.html#jax.flatten_util.ravel_pytree"><code class="language-plaintext highlighter-rouge">jax.flatten_util.ravel_pytree</code></a></strong> implements out-of-the-box, deterministic flattening and unflatteining of arbitrary iterables. (A powerful tool that, incidentally, doesn’t have a counterpart in Pytorch). This is just one of many functionalities provided by JAX’s Pytree API which makes parameter handling in JAX truly generalizable across model types, architectures and specification formats.</p>
+    <p><strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.flatten_util.ravel_pytree.html#jax.flatten_util.ravel_pytree"><code class="language-plaintext highlighter-rouge">jax.flatten_util.ravel_pytree</code></a></strong> implements out-of-the-box, deterministic flattening and unflattening of arbitrary iterables. (A powerful tool that, incidentally, doesn’t have a counterpart in Pytorch). This is just one of many functionalities provided by JAX’s Pytree API which makes parameter handling in JAX truly generalizable across model types, architectures and specification formats.</p>
   </li>
   <li>
     <p>We only need to write the <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code> function once. We can simply reuse it for analyzing any model that was trained using MSE loss.</p>
   </li>
 </ul>
 
-<p><strong>TIP:</strong> The <code class="language-plaintext highlighter-rouge">_MSE_loss</code> function shown here uses a <code class="language-plaintext highlighter-rouge">for</code> loop for simplicity. A more effient alternative would be to pass a vectorized version of <code class="language-plaintext highlighter-rouge">forward_copy</code> to <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code> instead. This can be done using JAX’s <strong><a href="https://docs.jax.dev/en/latest/automatic-vectorization.html"><code class="language-plaintext highlighter-rouge">vmap()</code></a></strong> transformation.</p>
+<p><strong>TIP:</strong> The <code class="language-plaintext highlighter-rouge">_MSE_loss</code> function shown here uses a <code class="language-plaintext highlighter-rouge">for</code> loop for simplicity. A more efficient alternative would be to pass a vectorized version of <code class="language-plaintext highlighter-rouge">forward_copy</code> to <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code> instead. This can be done using JAX’s <strong><a href="https://docs.jax.dev/en/latest/automatic-vectorization.html"><code class="language-plaintext highlighter-rouge">vmap()</code></a></strong> transformation.</p>
 
 <p><strong>CAUTION:</strong> <code class="language-plaintext highlighter-rouge">partial(_MSE_loss, X, Y)</code> bakes the training set (i.e. X, Y) into the function object returned by <code class="language-plaintext highlighter-rouge">generate_MSE_loss_func</code>. This makes the signature of the resulting function much cleaner. But doing this may increase the memory footprint due to dataset replication. However, if you are not running out of memory, then you probably don’t need to worry about this.</p>
 
@@ -261,9 +271,8 @@ Epoch 10, Loss: 1.7286
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 4. Loss function
 </span><span class="n">MSE_loss_copy</span> <span class="o">=</span> <span class="n">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span><span class="p">,</span> <span class="n">forward_copy_torch</span><span class="p">)</span>
-
-
-<span class="c1"># Test that our loss matches the original model's loss
+</code></pre></div></div>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Test that our loss matches the original model's loss
 </span><span class="n">original_loss</span> <span class="o">=</span> <span class="n">criterion</span><span class="p">(</span><span class="n">model</span><span class="p">(</span><span class="n">X</span><span class="p">),</span> <span class="n">Y</span><span class="p">)</span>
 <span class="n">params_flat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
 <span class="n">new_loss</span> <span class="o">=</span> <span class="n">MSE_loss_copy</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
@@ -294,6 +303,7 @@ Epoch 10, Loss: 1.7286
 <span class="o">@</span><span class="n">dataclass</span>
 <span class="k">class</span> <span class="nc">EigshArgs</span><span class="p">:</span>
     <span class="s">"""Helper class for managing the arguments to be passed to eigsh."""</span>
+
     <span class="n">k</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">sigma</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="bp">None</span>
     <span class="n">which</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s">'LM'</span>
@@ -304,29 +314,30 @@ Epoch 10, Loss: 1.7286
 
 <span class="k">class</span> <span class="nc">HessianAnalyzer</span><span class="p">:</span>
     <span class="s">"""
-    A utility class for analyzing the Hessian of a scalar loss function with respect 
-    to model parameters using JAX and SciPy.
+    A utility class for analyzing the Hessian of a scalar loss function with
+    respect to model parameters using JAX and Scipy.
 
     This class enables efficient computation of Hessian-vector products (HVPs) 
-    and eigenvalue/eigenvector analysis of the Hessian matrix without explicitly 
-    forming it.
+    and eigenvalue/eigenvector analysis of the Hessian matrix without
+    explicitly forming it.
 
     Attributes
     ----------
     params : PyTree
         Model parameters (e.g., weights of a neural network).
-    
+
     X_train : jnp.array
-        Training input data.
-    
+        Training inputs.
+
     Y_train : jnp.array
-        Training target data.
+        Training targets.
 
     forward : Callable
         A function `forward(params, x)` that computes the model's output.
 
     loss : Callable
-        A scalar-valued loss function `loss(params)` defined on the flattened parameter vector.
+        A scalar-valued loss function that accepts a flattened parameter
+        vector.
 
     dtype : jnp.dtype
         Data type used in LinearOperator construction. Default is jnp.float32.
@@ -334,17 +345,20 @@ Epoch 10, Loss: 1.7286
     Methods
     -------
     get_spectrum(eigsh_args: EigshArgs)
-        Computes the smallest or largest eigenvalues and eigenvectors of the Hessian
-        using `scipy.sparse.linalg.eigsh`, based on parameters in `eigsh_args`.
+        Computes the smallest or largest eigenvalues and eigenvectors of the
+        Hessian using `scipy.sparse.linalg.eigsh`, based on parameters in
+        `eigsh_args`.
 
     _matvec(v)
         Computes the Hessian-vector product H·v using forward-mode autodiff.
 
     _get_linear_operator()
-        Constructs a `scipy.sparse.linalg.LinearOperator` that represents the Hessian.
+        Constructs a `scipy.sparse.linalg.LinearOperator` that represents the
+        Hessian.
     """</span>
-    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">forward</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">):</span>
-        <span class="s">"""."""</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">params</span><span class="p">,</span> <span class="n">X_train</span><span class="p">,</span> <span class="n">Y_train</span><span class="p">,</span> <span class="n">forward</span><span class="p">,</span> <span class="n">loss</span><span class="p">,</span>
+                 <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">):</span>
         <span class="bp">self</span><span class="p">.</span><span class="n">params</span> <span class="o">=</span> <span class="n">params</span>
         <span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">unravel_func</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">params</span><span class="p">)</span>
         <span class="bp">self</span><span class="p">.</span><span class="n">X_train</span> <span class="o">=</span> <span class="n">X_train</span>
@@ -352,7 +366,7 @@ Epoch 10, Loss: 1.7286
         <span class="bp">self</span><span class="p">.</span><span class="n">forward</span> <span class="o">=</span> <span class="n">forward</span>
         <span class="bp">self</span><span class="p">.</span><span class="n">loss</span> <span class="o">=</span> <span class="n">loss</span>
         <span class="bp">self</span><span class="p">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span>
-        
+
     <span class="k">def</span> <span class="nf">_matvec</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">v</span><span class="p">):</span>
         <span class="c1"># Given a vector v, returns the hessian-vector product Hv.
 </span>        <span class="k">return</span> <span class="n">jvp</span><span class="p">(</span><span class="n">grad</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">loss</span><span class="p">),</span> <span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">],</span> <span class="p">[</span><span class="n">v</span><span class="p">])[</span><span class="mi">1</span><span class="p">]</span>
@@ -361,12 +375,12 @@ Epoch 10, Loss: 1.7286
         <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">params_flat</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">LinearOperator</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">),</span> <span class="n">matvec</span><span class="o">=</span><span class="bp">self</span><span class="p">.</span><span class="n">_matvec</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="p">.</span><span class="n">dtype</span><span class="p">)</span>
 
-    <span class="k">def</span> <span class="nf">get_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eish_args</span><span class="p">:</span> <span class="n">EigshArgs</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">get_spectrum</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="n">EigshArgs</span><span class="p">):</span>
         <span class="s">"""Simple wrapper around `scipy.sparse.linalg.eigsh`."""</span>
         <span class="n">linear_operator</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">_get_linear_operator</span><span class="p">()</span>
-        <span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">eigsh</span><span class="p">(</span><span class="n">linear_operator</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">eish_args</span><span class="p">.</span><span class="n">k</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">sigma</span><span class="p">,</span>
-                                 <span class="n">which</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">which</span><span class="p">,</span> <span class="n">v0</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">v0</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">tol</span><span class="p">,</span>
-                                 <span class="n">return_eigenvectors</span><span class="o">=</span><span class="n">eigsh_args</span><span class="p">.</span><span class="n">return_eigenvectors</span><span class="p">)</span>
+        <span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">eigsh</span><span class="p">(</span><span class="n">linear_operator</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">k</span><span class="p">,</span> <span class="n">sigma</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">sigma</span><span class="p">,</span>
+                                 <span class="n">which</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">which</span><span class="p">,</span> <span class="n">v0</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">v0</span><span class="p">,</span> <span class="n">tol</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">tol</span><span class="p">,</span>
+                                 <span class="n">return_eigenvectors</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">return_eigenvectors</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span>
 </code></pre></div></div>
 
@@ -375,23 +389,24 @@ Epoch 10, Loss: 1.7286
 <ol>
   <li>The <code class="language-plaintext highlighter-rouge">HessianAnalyzer</code> class encapsulates the entire eigenspectrum computation functionality, and provides a simple interface for interacting with the core module.</li>
   <li>
-    <p>The <code class="language-plaintext highlighter-rouge">_matvec</code> method implements the Hessian-vector product. Since this is an important computation, it warrants some attention. First we make a simple observation - the Hessian is nothing but the Jacobian of the gradient. So, for a point \(\theta\) and a direction vector \(v\) in parameter space, we have \(\begin{equation}H_{\theta}\cdot v = J_{\theta}(\nabla \mathcal{L}) \cdot v\end{equation}\). The right hand side of the above equation is precisely what <code class="language-plaintext highlighter-rouge">_matvec</code> returns. More specifically, the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.grad.html#jax.grad"><code class="language-plaintext highlighter-rouge">grad()</code></a></strong> transformation computes the gradient of the loss function, and the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp"><code class="language-plaintext highlighter-rouge">jvp()</code></a></strong> transformation computes the Jacobian-vector product. (<code class="language-plaintext highlighter-rouge">grad()</code> and <code class="language-plaintext highlighter-rouge">jvp()</code> are powerful and flexible transformations at the core of JAX’s <a href="https://docs.jax.dev/en/latest/automatic-differentiation.html">automatic differentiation</a> machinery.)</p>
+    <p>The <code class="language-plaintext highlighter-rouge">_matvec</code> method implements the Hessian-vector product. Since this is an important computation, it warrants some attention. First we make a simple observation - the Hessian is nothing but the Jacobian of the gradient. So, for a point $\theta$ and a direction vector $v$ in parameter space, we have \(H_{\theta}\cdot v = J_{\theta}(\nabla \mathcal{L}) \cdot v\)The right hand side of the above equation is precisely what <code class="language-plaintext highlighter-rouge">_matvec</code> returns. More specifically, the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.grad.html#jax.grad"><code class="language-plaintext highlighter-rouge">grad()</code></a></strong> transformation computes the gradient of the loss function, and the <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jvp.html#jax.jvp"><code class="language-plaintext highlighter-rouge">jvp()</code></a></strong> transformation computes the Jacobian-vector product. (<code class="language-plaintext highlighter-rouge">grad()</code> and <code class="language-plaintext highlighter-rouge">jvp()</code> are powerful and flexible transformations at the core of JAX’s <a href="https://docs.jax.dev/en/latest/automatic-differentiation.html">automatic differentiation</a> machinery.)</p>
   </li>
   <li>The <code class="language-plaintext highlighter-rouge">_get_linear_operator</code> method simply generates a <strong><a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.LinearOperator.html"><code class="language-plaintext highlighter-rouge">LinearOperator</code></a></strong> object which provides a common interface for performing matrix-vector products.</li>
   <li>The “public” <code class="language-plaintext highlighter-rouge">get_spectrum</code> method serves as the access point for users to invoke the <code class="language-plaintext highlighter-rouge">eigsh</code> routine for computing the Hessian eigenspectrum.</li>
-  <li>The <code class="language-plaintext highlighter-rouge">EigshArgs</code> class helps manage the arguments to be passed to <code class="language-plaintext highlighter-rouge">eigsh</code>. More or fewer arguments can be configured based on the usecase.</li>
+  <li>The <code class="language-plaintext highlighter-rouge">EigshArgs</code> class helps manage the arguments to be passed to <code class="language-plaintext highlighter-rouge">eigsh</code>. More or fewer arguments can be configured based on the use-case.</li>
 </ol>
 
-<p><strong>TIP</strong>: The running time of the entire eigenspectrum computation routine is hugely infulenced by the running time of the <code class="language-plaintext highlighter-rouge">_matvec</code> method since this method is called repeatedly from inside <code class="language-plaintext highlighter-rouge">eigsh</code> (for computing the Arnoldi vectors). The running time of <code class="language-plaintext highlighter-rouge">_matvec</code> is in turn dependent on the running time of <code class="language-plaintext highlighter-rouge">grad(self.loss)</code>, which in turn depends on the running time of <code class="language-plaintext highlighter-rouge">self.loss</code>. The overall performance can be dramatically improved by using JAX’s <a href="https://docs.jax.dev/en/latest/jit-compilation.html">just-in-time compilation</a> transformation <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jit.html#jax.jit"><code class="language-plaintext highlighter-rouge">jit()</code></a></strong> on <code class="language-plaintext highlighter-rouge">self.loss</code> (and possibly <code class="language-plaintext highlighter-rouge">grad(self.loss))</code>.</p>
+<p><strong>TIP</strong>: The running time of the entire eigenspectrum computation routine is hugely influenced by the running time of the <code class="language-plaintext highlighter-rouge">_matvec</code> method since this method is called repeatedly from inside <code class="language-plaintext highlighter-rouge">eigsh</code> (for computing the Arnoldi vectors). The running time of <code class="language-plaintext highlighter-rouge">_matvec</code> is in turn dependent on the running time of <code class="language-plaintext highlighter-rouge">grad(self.loss)</code>, which in turn depends on the running time of <code class="language-plaintext highlighter-rouge">self.loss</code>. The overall performance can be dramatically improved by using JAX’s <a href="https://docs.jax.dev/en/latest/jit-compilation.html">just-in-time compilation</a> transformation <strong><a href="https://docs.jax.dev/en/latest/_autosummary/jax.jit.html#jax.jit"><code class="language-plaintext highlighter-rouge">jit()</code></a></strong> on <code class="language-plaintext highlighter-rouge">self.loss</code> (and possibly <code class="language-plaintext highlighter-rouge">grad(self.loss))</code>.</p>
 
-<p><strong>CAUTION</strong>: If the <code class="language-plaintext highlighter-rouge">v0</code> argument is set to <code class="language-plaintext highlighter-rouge">None</code>, <code class="language-plaintext highlighter-rouge">eigsh</code> will randomly generate a starting vector. This means a different set of eigenvectors will be returned by two identical calls to <code class="language-plaintext highlighter-rouge">eigsh</code>. This can lead to confusion. For the sake of reproducibility, it is better to generate a random vector yourself and supply it to <code class="language-plaintext highlighter-rouge">eigsh</code>.</p>
+<p><strong>CAUTION</strong>: If the <code class="language-plaintext highlighter-rouge">v0</code> argument is set to <code class="language-plaintext highlighter-rouge">None</code>, <code class="language-plaintext highlighter-rouge">eigsh</code> will randomly generate a starting vector. This means different sets of eigenvectors will be returned by two identical calls to <code class="language-plaintext highlighter-rouge">eigsh</code>. This can lead to confusion. For the sake of reproducibility, it is better to generate a random vector yourself and supply it to <code class="language-plaintext highlighter-rouge">eigsh</code>.</p>
 
 <p>Now that we have reviewed the core module, let’s go ahead and invoke it for computing the Hessian eigenspectrum.</p>
 
 <h2 id="computing-the-hessian-eigenspectrum">Computing the Hessian eigenspectrum</h2>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Create an analyzer instance
-</span><span class="n">ha</span> <span class="o">=</span> <span class="n">HessianAnalyzer</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span><span class="p">,</span> <span class="n">forward_copy_torch</span><span class="p">,</span> <span class="n">MSE_loss_copy</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+</span><span class="n">ha</span> <span class="o">=</span> <span class="n">HessianAnalyzer</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_jnp</span><span class="p">,</span> <span class="n">Y_jnp</span><span class="p">,</span> <span class="n">forward_copy_torch</span><span class="p">,</span> <span class="n">MSE_loss_copy</span><span class="p">,</span>
+                     <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
 
 <span class="c1"># Configure arguments to be supplied to eigsh
 </span><span class="n">eigsh_args</span> <span class="o">=</span> <span class="n">EigshArgs</span><span class="p">(</span>
@@ -407,16 +422,14 @@ Epoch 10, Loss: 1.7286
 </span><span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">ha</span><span class="p">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">eigsh_args</span><span class="p">)</span>
 </code></pre></div></div>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># eigenvalues
-</span><span class="n">eigvals</span>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="n">eigvals</span><span class="p">)</span>
 </code></pre></div></div>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([-1.1432382 , -0.61654264,  0.1918977 ,  1.1418587 ,  1.3489572 ,
        76.840744  ], dtype=float32)
 </code></pre></div></div>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># eigenvectors
-</span><span class="n">eigvecs</span><span class="p">.</span><span class="n">shape</span>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="n">eigvecs</span><span class="p">.</span><span class="n">shape</span><span class="p">)</span>
 </code></pre></div></div>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(9, 6)
@@ -424,7 +437,7 @@ Epoch 10, Loss: 1.7286
 
 <p>Done!</p>
 
-<p>To recap, we have utilized our two-part framework to compute the Hessian eigenvalues and eigenvectors of a Pytorch model using JAX. <em>And we did this by implementing the necessary code changes as formal, reusable and testable functions, while entirely avoiding any code changes to the core module.</em></p>
+<p>To recap, we have utilized our framework to compute the Hessian eigenvalues and eigenvectors of a Pytorch model using JAX. <em>And we did this by implementing (a limited number of) necessary code changes as formal, reusable and testable functions, while entirely avoiding any code changes to the core module.</em></p>
 
 <p>Now let’s take a look at an end-to-end example of analyzing a <em>tensorflow</em> model using our framework.</p>
 
@@ -439,13 +452,15 @@ Epoch 10, Loss: 1.7286
 <span class="n">random</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 
 <span class="c1"># === Data ===
-</span><span class="n">X_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>   <span class="c1"># shape (2, 2)
+</span><span class="n">X_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>     <span class="c1"># shape (2, 2)
 </span><span class="n">Y_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([</span><span class="mf">5.</span><span class="p">,</span> <span class="mf">6.</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">).</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># shape (2, 1)
 </span>
 <span class="c1"># === Model Definition ===
 </span><span class="n">model</span> <span class="o">=</span> <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">Sequential</span><span class="p">([</span>
-    <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">layers</span><span class="p">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">'dense_1'</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,)),</span>  <span class="c1"># Hidden: 2x2
-</span>    <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">layers</span><span class="p">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">'dense_2'</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">use_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>                     <span class="c1"># Output: 2x1
+    <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">layers</span><span class="p">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">'dense_1'</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                          <span class="n">use_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">input_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,)),</span>  <span class="c1"># Hidden: 2x2
+</span>    <span class="n">tf</span><span class="p">.</span><span class="n">keras</span><span class="p">.</span><span class="n">layers</span><span class="p">.</span><span class="n">Dense</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s">'dense_2'</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span>
+                          <span class="n">use_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>                     <span class="c1"># Output: 2x1
 </span><span class="p">])</span>
 
 <span class="c1"># === Compile Model ===
@@ -459,7 +474,6 @@ Epoch 10, Loss: 1.7286
 </code></pre></div></div>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Epoch 1/2
-WARNING:tensorflow:6 out of the last 11 calls to &lt;function TensorFlowTrainer._make_function.&lt;locals&gt;.multi_step_on_iterator at 0x17a48dd00&gt; triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
 [1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 200ms/step - loss: 12.3536
 Epoch 2/2
 [1m1/1[0m [32m━━━━━━━━━━━━━━━━━━━━[0m[37m[0m [1m0s[0m 46ms/step - loss: 2.2821
@@ -468,28 +482,35 @@ Epoch 2/2
 <h2 id="generating-mediating-objects-1">Generating mediating objects</h2>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 1. Model params
-</span><span class="k">def</span> <span class="nf">extract_tf_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">):</span>
+</span>
+<span class="k">def</span> <span class="nf">extract_tf_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">):</span>
     <span class="n">param_dict</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">model</span><span class="p">.</span><span class="n">layers</span><span class="p">:</span>
         <span class="n">weights</span> <span class="o">=</span> <span class="n">layer</span><span class="p">.</span><span class="n">get_weights</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">weights</span><span class="p">:</span>  <span class="c1"># Skip layers without weights
 </span>            <span class="n">kernel</span><span class="p">,</span> <span class="n">bias</span> <span class="o">=</span> <span class="n">weights</span>
-            <span class="n">kernel_list</span> <span class="o">=</span> <span class="p">[[</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">kernel</span><span class="p">.</span><span class="n">tolist</span><span class="p">()]</span>
+            <span class="n">kernel_list</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span>
+                <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">kernel</span><span class="p">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="p">]</span>
             <span class="n">bias_list</span> <span class="o">=</span> <span class="p">[</span><span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">val</span><span class="p">),</span> <span class="mi">7</span><span class="p">)</span> <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">bias</span><span class="p">.</span><span class="n">tolist</span><span class="p">()]</span>
             <span class="c1"># Use standard naming: layer_name/kernel and layer_name/bias
 </span>            <span class="n">param_dict</span><span class="p">[</span><span class="sa">f</span><span class="s">"</span><span class="si">{</span><span class="n">layer</span><span class="p">.</span><span class="n">name</span><span class="si">}</span><span class="s">/kernel"</span><span class="p">]</span> <span class="o">=</span> <span class="n">kernel_list</span>
             <span class="n">param_dict</span><span class="p">[</span><span class="sa">f</span><span class="s">"</span><span class="si">{</span><span class="n">layer</span><span class="p">.</span><span class="n">name</span><span class="si">}</span><span class="s">/bias"</span><span class="p">]</span> <span class="o">=</span> <span class="n">bias_list</span>
     <span class="k">return</span> <span class="n">param_dict</span>
 
+
 <span class="n">params</span> <span class="o">=</span> <span class="n">extract_tf_model_parameters</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 2. Training data
-# # Not casting function needed since tensorflow and JAX both work directly with numpy arrays
+</span>
+<span class="c1"># # No casting function needed since tensorflow and JAX both work directly with numpy arrays
 </span></code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 3. Output function
-</span><span class="k">def</span> <span class="nf">forward_copy_tf</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+</span>
+<span class="k">def</span> <span class="nf">forward_copy_tf</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
     <span class="n">w1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_1/kernel'</span><span class="p">])</span>
     <span class="n">b1</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_1/bias'</span><span class="p">])</span>
     <span class="n">w2</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">params</span><span class="p">[</span><span class="s">'dense_2/kernel'</span><span class="p">])</span>
@@ -497,8 +518,8 @@ Epoch 2/2
     <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w1</span><span class="p">)</span> <span class="o">+</span> <span class="n">b1</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">jnp</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">w2</span><span class="p">)</span> <span class="o">+</span> <span class="n">b2</span>
     <span class="k">return</span> <span class="n">x</span>
-
-<span class="c1"># Example input to test our output function
+</code></pre></div></div>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Example input to test our output function
 </span><span class="n">x_input</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">([[</span><span class="mf">1.</span><span class="p">,</span> <span class="mf">2.</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
 
 <span class="n">orig_output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">tf</span><span class="p">.</span><span class="n">convert_to_tensor</span><span class="p">(</span><span class="n">x_input</span><span class="p">))</span>
@@ -513,11 +534,13 @@ new output:  [3.1914134]
 </code></pre></div></div>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 4. Loss function
-# # We can use the existing generator function for MSE loss.
+</span>
+<span class="c1"># # We can reuse the existing generator function for MSE loss.
 </span>
 <span class="n">MSE_loss_copy_tf</span> <span class="o">=</span> <span class="n">generate_MSE_loss_func</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">forward_copy_tf</span><span class="p">)</span>
+</code></pre></div></div>
 
-<span class="c1"># Test that our loss matches the original model's loss
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Test that our loss matches the original model's loss
 ## new loss
 </span><span class="n">params_flat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">ravel_pytree</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
 <span class="n">new_loss</span> <span class="o">=</span> <span class="n">MSE_loss_copy_tf</span><span class="p">(</span><span class="n">params_flat</span><span class="p">)</span>
@@ -538,7 +561,8 @@ new output:  [3.1914134]
 <h2 id="computing-the-hessian-eigenspectrum-1">Computing the Hessian eigenspectrum</h2>
 
 <div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># Create an analyzer instance
-</span><span class="n">ha</span> <span class="o">=</span> <span class="n">HessianAnalyzer</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">forward_copy_tf</span><span class="p">,</span> <span class="n">MSE_loss_copy_tf</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+</span><span class="n">ha</span> <span class="o">=</span> <span class="n">HessianAnalyzer</span><span class="p">(</span><span class="n">params</span><span class="p">,</span> <span class="n">X_np</span><span class="p">,</span> <span class="n">Y_np</span><span class="p">,</span> <span class="n">forward_copy_tf</span><span class="p">,</span> <span class="n">MSE_loss_copy_tf</span><span class="p">,</span>
+                     <span class="n">dtype</span><span class="o">=</span><span class="n">jnp</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
 
 <span class="c1"># Configure arguments to be supplied to eigsh
 </span><span class="n">eigsh_args</span> <span class="o">=</span> <span class="n">EigshArgs</span><span class="p">(</span>
@@ -554,14 +578,14 @@ new output:  [3.1914134]
 </span><span class="n">eigvals</span><span class="p">,</span> <span class="n">eigvecs</span> <span class="o">=</span> <span class="n">ha</span><span class="p">.</span><span class="n">get_spectrum</span><span class="p">(</span><span class="n">eigsh_args</span><span class="p">)</span>
 </code></pre></div></div>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">eigvals</span>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="n">eigvals</span><span class="p">)</span>
 </code></pre></div></div>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>array([ -1.2113413 ,  -0.8476425 ,   0.13638566,   0.99271876,
          1.5289528 , 109.21992   ], dtype=float32)
 </code></pre></div></div>
 
-<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">eigvecs</span><span class="p">.</span><span class="n">shape</span>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">print</span><span class="p">(</span><span class="n">eigvecs</span><span class="p">.</span><span class="n">shape</span><span class="p">)</span>
 </code></pre></div></div>
 
 <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>(9, 6)
@@ -570,7 +594,7 @@ new output:  [3.1914134]
 <p>Done!</p>
 
 <h1 id="recap">Recap</h1>
-<p>In this post, we examined a proposed framework for platform-agnostic Hessian analysis (viz. eigenspectrum computation) of deep learning models using a high-performance JAX backend. This framework allowed us to switch between platforms (e.g. Pytorch and tensroflow) by implementing a limited number of necessary code changes in the form of reusable and testable functions, while completely avoiding any changes to the core numerical code.</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. Pytorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.]]></summary></entry><entry><title type="html">Verifying Neural Network Robustness with Linear Programming</title><link href="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/" rel="alternate" type="text/html" title="Verifying Neural Network Robustness with Linear Programming" /><published>2024-03-15T00:00:00-07:00</published><updated>2024-03-15T00:00:00-07:00</updated><id>http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming</id><content type="html" xml:base="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/"><![CDATA[<p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
+<p>In this post, we examined a proposed framework for platform-agnostic Hessian analysis (viz. eigenspectrum computation) of neural networks using a high-performance JAX backend. This framework allowed us to switch between platforms (e.g. Pytorch, tensorflow, etc.) by implementing a limited number of necessary code changes in the form of reusable and testable functions, while completely avoiding any changes to the core numerical code.</p>]]></content><author><name>Ayush Bharadwaj</name></author><summary type="html"><![CDATA[In mechanistic interpretability research, we often want to analyze the Hessian of the loss function (for example, by computing its eigenspectrum). Ideally, we would want our Hessian analysis code to work seamlessly for all models irrespective of architecture or training platform (e.g. PyTorch, tensorflow, flax, etc.). However, this is hard to achieve because of platform-specific interfaces for accessing information about the model (e.g. datasets, parameters, and functions). As a result, we end up tightly coupling our analysis code with the training platform, forcing unnecessary re-writes when switching platforms.]]></summary></entry><entry><title type="html">Verifying Neural Network Robustness with Linear Programming</title><link href="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/" rel="alternate" type="text/html" title="Verifying Neural Network Robustness with Linear Programming" /><published>2024-03-15T00:00:00-07:00</published><updated>2024-03-15T00:00:00-07:00</updated><id>http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming</id><content type="html" xml:base="http://localhost:4000/verifying-neural-nertwork-robustness-using-linear-programming/"><![CDATA[<p><em>Robustness</em> is a desirable property in a neural network. Informally, robustness can be described as ‘resilience to perturbations in the input’. Said differently, a neural network is robust if small changes to the input produce small or no changes to the output. In particular, if the network is a classifier, robustness means that inputs close to each other should be assigned the same class by the network.</p>
 
 <p>Ensuring robustness of networks is important because neural networks are vulnerable to adversarial examples produced by small perturbations in the input. E.g. small changes in the image of a chihuahua can lead a network to <a href="https://www.freecodecamp.org/news/chihuahua-or-muffin-my-search-for-the-best-computer-vision-api-cbda4d6b425d/">classify it as a chocolate chip muffin</a>. Below, we take a simple but concrete example to illustrate how a non-robust network can be exploited.</p>
 
